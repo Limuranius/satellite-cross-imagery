@@ -2,6 +2,7 @@ import datetime
 from MERSIInfo import MERSIInfo
 from MODISInfo import MODISInfo
 from Info import Info
+from downloader import download_mersi_files, download_modis_files
 
 
 def find_close_imgs(
@@ -33,9 +34,8 @@ lat = 35.5
 list_modis = MODISInfo.find_containing_point(start, end, lon, lat)
 list_mersi = MERSIInfo.find_containing_point(start, end, lon, lat)
 
-
 pairs = find_close_imgs(list_modis, list_mersi, datetime.timedelta(minutes=30))
-for pair in pairs:
-    print(abs(pair[0].dt - pair[1].dt))
-
-
+list_modis = [pair[0] for pair in pairs]
+list_mersi = [pair[1] for pair in pairs]
+download_mersi_files(list_mersi)
+download_modis_files(list_modis)

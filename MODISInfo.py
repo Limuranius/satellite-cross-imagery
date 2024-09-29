@@ -23,6 +23,9 @@ class MODISInfo(Info):
         img_infos = [info for info in img_infos if info.contains_pos(lon, lat)]
         return img_infos
 
+    def get_file_url(self) -> str:
+        return "https://ladsweb.modaps.eosdis.nasa.gov" + self.fileURL
+
 
 def find_inside_area(
         start: datetime.date,
