@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import datetime
 import json
+from dataclasses import dataclass
 
 import requests
+from tqdm import tqdm
 
 from Info import Info
 
 
+@dataclass
 class MERSIInfo(Info):
     @classmethod
     def find_containing_point(
@@ -16,12 +19,37 @@ class MERSIInfo(Info):
             end: datetime.date,
             lon: float,
             lat: float) -> list[MERSIInfo]:
-        pass
-
+        import MERSI_database
+        start = datetime.datetime.combine(start, datetime.datetime.min.time())
+        end = datetime.datetime.combine(end, datetime.datetime.min.time())
+        step = datetime.timedelta(minutes=5)
+        dt = start
+        result = []
+        with tqdm(total=(end - start).total_seconds() // 300) as pbar:
+            while dt <= end:
+                if MERSI_database.has_dt(dt):
+                    info = MERSI_database.get_by_dt(dt)
+                elif MERSI_database.has_invalid(dt):
+                    pbar.update(1)
+                    dt += step
+                    continue
+                else:
+                    info = cls.from_datetime(dt)
+                    if info is None:
+                        print("Bruh", dt)
+                        MERSI_database.add_invalid(dt)
+                        pbar.update(1)
+                        dt += step
+                        continue
+                    MERSI_database.add_info(info)
+                if info.contains_pos(lon, lat):
+                    result.append(info)
+                pbar.update(1)
+                dt += step
+        return result
 
     @classmethod
-    @classmethod
-    def from_datetime(cls, dt: datetime) -> MERSIInfo:
+    def from_datetime(cls, dt: datetime) -> MERSIInfo | None:
         str_data = dt.strftime(
             "{i:'-1',iteminfo:'^-1!FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF!FY3D!L1!img!1!s9000.dmz.nsmc.org.cn!IMG_LIB/FY3D/FY3D_MERSI_GBAL_L1_YYYYMMDD_HHmm_1000M_MS.HDF/%Y%m%d/FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF.jpg'}")
         r = requests.post(
@@ -39,25 +67,12 @@ class MERSIInfo(Info):
         t = json.loads(t)
         if int(t["datasize"]) == 0:
             return None
-        return MersiImageInfo(
+        return MERSIInfo(
+            p1=(float(t["longitudewn"]), float(t["latitudewn"])),
+            p2=(float(t["longitudeen"]), float(t["latitudeen"])),
+            p3=(float(t["longitudees"]), float(t["latitudees"])),
+            p4=(float(t["longitudews"]), float(t["latitudews"])),
             dt=dt,
-            Satellite=t["satellitename"],
-            File=t["archivename"],
-            Product=t["PRODUCTIONNAMEENG"],
-            Receiving_station_identification=t["station"],
-            Data_collection_start_time_UTC=datetime.fromisoformat(t["databegindate"]),
-            Data_collection_end_time_UTC=datetime.fromisoformat(t["dataenddate"]),
-            Data_generation_time=datetime.fromisoformat(t["datacreatedate"]),
-            Data_Size=int(t["datasize"]),
-            Quality_Evaluation_logo=int(t["qualityflag"]),
-            Total_number_of_scan_lines=int(t["actualscanline"]),
-            Actual_number_of_scan_lines=int(t["actualscanline"]),
-            Southeast_corner_latitude=float(t["latitudees"]),
-            Northwest_corner_latitude=float(t["latitudewn"]),
-            Southwest_corner_Latitude=float(t["latitudews"]),
-            Northeast_corner_latitude=float(t["latitudeen"]),
-            Northeast_corner_longitude=float(t["longitudeen"]),
-            Southeast_corner_longitude=float(t["longitudees"]),
-            Northwest_corner_longitude=float(t["longitudewn"]),
-            Southwest_corner_longitude=float(t["longitudews"]),
+            satellite="FY-3D",
+            filename=t["archivename"],
         )

@@ -1,7 +1,6 @@
 import datetime
-import matplotlib.pyplot as plt
-
-import get_mersi_list, get_modis_list
+from MERSIInfo import MERSIInfo
+from MODISInfo import MODISInfo
 from Info import Info
 
 
@@ -31,8 +30,8 @@ end = datetime.date(2024, 9, 27)
 lon = 140
 lat = 35.5
 
-list_modis = get_modis_list.find_containing_point(start, end, lon, lat)
-list_mersi = get_mersi_list.find_containing_point(start, end, lon, lat)
+list_modis = MODISInfo.find_containing_point(start, end, lon, lat)
+list_mersi = MERSIInfo.find_containing_point(start, end, lon, lat)
 
 
 pairs = find_close_imgs(list_modis, list_mersi, datetime.timedelta(minutes=30))

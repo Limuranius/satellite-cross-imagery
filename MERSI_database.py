@@ -1,7 +1,7 @@
 import csv
 import datetime
 
-from Info import Info
+from MERSIInfo import MERSIInfo
 
 with open("data.csv") as csvfile:
     reader = csv.reader(csvfile)
@@ -16,8 +16,8 @@ with open("invalid.txt") as file:
     invalid = set([datetime.datetime.fromisoformat(date) for date in file.read().split()])
 
 
-def parse_line(line) -> Info:
-    return Info(
+def parse_line(line) -> MERSIInfo:
+    return MERSIInfo(
         (float(line[0]), float(line[1])),
         (float(line[2]), float(line[3])),
         (float(line[4]), float(line[5])),
@@ -27,7 +27,7 @@ def parse_line(line) -> Info:
     )
 
 
-def to_line(info: Info):
+def to_line(info: MERSIInfo):
     return [
         info.p1[0], info.p1[1],
         info.p2[0], info.p2[1],
@@ -37,11 +37,11 @@ def to_line(info: Info):
     ]
 
 
-def get_by_dt(dt: datetime.datetime) -> Info | None:
+def get_by_dt(dt: datetime.datetime) -> MERSIInfo | None:
     return parse_line(data_dict.get(dt))
 
 
-def add_info(info: Info):
+def add_info(info: MERSIInfo):
     data.append(to_line(info))
     with open("data.csv", "w", newline="") as file:
         csv.writer(file).writerows(data)

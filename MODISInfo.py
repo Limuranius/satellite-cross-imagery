@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import datetime
+from dataclasses import dataclass
 
 import requests
 
 from Info import Info
 
 
+@dataclass
 class MODISInfo(Info):
+    fileURL: str = None
+
     @classmethod
     def find_containing_point(
             cls,
@@ -45,6 +49,7 @@ def find_inside_area(
             p4=(float(r["GRingLongitude4"]), float(r["GRingLatitude4"])),
             dt=datetime.datetime.fromisoformat(r["start"]),
             satellite="MODIS AQUA",
-            filename=r["filename"],
+            filename=r["name"],
+            fileURL=r["fileURL"]
         ))
     return result

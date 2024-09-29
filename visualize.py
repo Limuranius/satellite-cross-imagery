@@ -2,7 +2,8 @@ import datetime
 
 import folium
 
-import get_mersi_list, get_modis_list
+from MERSIInfo import MERSIInfo
+from MODISInfo import MODISInfo
 from utils import random_color, reverse_coords, fix_antimeridian
 
 map_obj = folium.Map()
@@ -12,9 +13,9 @@ end = datetime.date(2024, 9, 27)
 lon = 140
 lat = 35.5
 
-# list_modis = get_modis_list.find_containing_point(start, end, lon, lat)
+list_modis = MODISInfo.find_containing_point(start, end, lon, lat)
+list_mersi = MERSIInfo.find_containing_point(start, end, lon, lat)
 # img_list = list_modis
-list_mersi = get_mersi_list.find_containing_point(start, end, lon, lat)
 img_list = list_mersi
 
 
