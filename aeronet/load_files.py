@@ -3,7 +3,9 @@ from io import StringIO
 import pandas as pd
 from tqdm import tqdm
 
-with open("needed_sites.txt") as f:
+from aeronet.paths import NEEDED_SITES_PATH
+
+with open(NEEDED_SITES_PATH) as f:
     NEEDED_SITES = f.read().split()
     NEEDED_SITES = list(map(lambda s: s.lower(), NEEDED_SITES))
 
@@ -61,6 +63,12 @@ def load_phase(dir_path: str) -> pd.DataFrame:
 
 def load_ocean_color(dir_path: str) -> pd.DataFrame:
     files = os.listdir(dir_path)
+
+    def filt(file_name: str):
+        site = file_name[18:-10].lower()
+        return site in NEEDED_SITES
+
+    files = list(filter(filt, files))
     sites = [file_name[18:-10] for file_name in files]
     files = [os.path.join(dir_path, file) for file in files]
     dfs = []
