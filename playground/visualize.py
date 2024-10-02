@@ -2,8 +2,8 @@ import datetime
 
 import folium
 
-from MERSIInfo import MERSIInfo
-from MODISInfo import MODISInfo
+from light_info.MERSIInfo import MERSIInfo
+from light_info.MODISInfo import MODISInfo
 from utils import random_color, reverse_coords, fix_antimeridian
 
 map_obj = folium.Map()

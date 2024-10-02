@@ -1,9 +1,7 @@
-import datetime
-
 from tqdm import tqdm
 
-from MERSIInfo import MERSIInfo
-from MODISInfo import MODISInfo
+from light_info.MERSIInfo import MERSIInfo
+from light_info.MODISInfo import MODISInfo
 import select_MERSI_files
 import webbrowser
 

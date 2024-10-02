@@ -1,8 +1,8 @@
 import datetime
 import matplotlib.pyplot as plt
 
-from MERSIInfo import MERSIInfo
-from MODISInfo import MODISInfo
+from light_info.MERSIInfo import MERSIInfo
+from light_info.MODISInfo import MODISInfo
 
 start = datetime.date(2024, 8, 31)
 end = datetime.date(2024, 9, 27)

@@ -1,8 +1,8 @@
 import datetime
-from MERSIInfo import MERSIInfo
-from MODISInfo import MODISInfo
-from Info import Info
-from downloader import download_mersi_files, download_modis_files
+from light_info.MERSIInfo import MERSIInfo
+from light_info.MODISInfo import MODISInfo
+from light_info.Info import Info
+from web.downloader import download_mersi_files, download_modis_files
 
 
 def find_close_imgs(
