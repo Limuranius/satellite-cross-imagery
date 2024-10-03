@@ -40,6 +40,42 @@ class AERONETDataRow:
         fmt = "{:.6f}[{}nm]"
         return self.INV_PFN[fmt.format(phase_degree, wavelength)]
 
+    def asymmetry_factor(
+            self,
+            wavelength: int
+    ):
+        fmt = "Asymmetry_Factor-Total[{}nm]"
+        return self.INV[fmt.format(wavelength)]
+
+    def AOD(self, wavelength: int) -> float:
+        fmt = "Aerosol_Optical_Depth[{}nm]"
+        return self.INV[fmt.format(wavelength)]
+
+    def ROD(self, wavelength: int) -> float:
+        fmt = "Rayleigh_Optical_Depth[{}nm]"
+        return self.INV[fmt.format(wavelength)]
+
+    def SSA(self, wavelength: int) -> float:
+        fmt = "Single_Scattering_Albedo[{}nm]"
+        return self.INV[fmt.format(wavelength)]
+
+    def Lwn_FQ(self, wavelength: int) -> float:
+        fmt = "Lwn_f/Q[{}nm]"
+        return self.INV[fmt.format(wavelength)]
+
+    def F0(self, wavelength: int) -> float:
+        raise NotImplementedError()
+
+    def day_of_year(self) -> float:
+        return self.INV["Day_of_Year(Fraction)"]
+
+    def dates(self) -> tuple[datetime.datetime, datetime.datetime, datetime.datetime]:
+        return (
+            self.OC["Datetime"],
+            self.INV["Datetime"],
+            self.INV_PFN["Datetime"],
+        )
+
 
 class AERONETData:
     OC: pd.DataFrame = aeronet.load_files.load_ocean_color(aeronet.paths.OCEAN_COLOR_PATH)

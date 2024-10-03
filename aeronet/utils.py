@@ -21,7 +21,7 @@ def get_closest_date_data(
         df: pd.DataFrame,
         site: str,
         dt: datetime.datetime,
-        max_time_diff = datetime.timedelta(hours=3)
+        max_time_diff = datetime.timedelta(days=1000)
 ):
     site_data = df[df["Site"] == site]
     i = abs(site_data["Datetime"] - dt).argmin()
