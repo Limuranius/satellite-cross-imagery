@@ -30,9 +30,9 @@ def find_close_imgs(
     return result
 
 
-start = datetime.date(2024, 9, 1)
-end = datetime.date(2024, 9, 27)
-lon, lat = stations.positions["Ieodo_Station"]
+start = datetime.date(2024, 9, 11)
+end = datetime.date(2024, 9, 13)
+lon, lat, _ = stations_positions.positions["Ieodo_Station"]
 
 list_modis = MODISInfo.find_containing_point(start, end, lon, lat)
 list_mersi = MERSIInfo.find_containing_point(start, end, lon, lat)
@@ -49,10 +49,12 @@ for mersi, modis in zip(list_mersi, list_modis):
     folium.Polygon(
         reverse_coords(fix_antimeridian([mersi.p1, mersi.p2, mersi.p3, mersi.p4])),
         color=color,
+        popup="MERSI",
     ).add_to(map_obj)
     folium.Polygon(
         reverse_coords(fix_antimeridian([modis.p1, modis.p2, modis.p3, modis.p4])),
         color=color,
+        popup="MODIS",
     ).add_to(map_obj)
 
 map_obj.show_in_browser()

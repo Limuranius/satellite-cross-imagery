@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import requests
 from tqdm import tqdm
 
-from Info import Info
+from .Info import Info
 
 
 @dataclass
@@ -19,7 +19,7 @@ class MERSIInfo(Info):
             end: datetime.date,
             lon: float,
             lat: float) -> list[MERSIInfo]:
-        import MERSI_database
+        from . import MERSI_database
         start = datetime.datetime.combine(start, datetime.datetime.min.time())
         end = datetime.datetime.combine(end, datetime.datetime.min.time())
         step = datetime.timedelta(minutes=5)

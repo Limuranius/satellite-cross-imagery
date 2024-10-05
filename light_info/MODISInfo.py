@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import requests
 
-from Info import Info
+from .Info import Info
 
 
 @dataclass

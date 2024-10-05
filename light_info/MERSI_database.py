@@ -1,9 +1,10 @@
 import csv
 import datetime
+from . import paths
 
-from MERSIInfo import MERSIInfo
+from .MERSIInfo import MERSIInfo
 
-with open("data.csv") as csvfile:
+with open(paths.MERSI_DATA_PATH) as csvfile:
     reader = csv.reader(csvfile)
     data = [*reader]
     data = [i for i in data if i]
@@ -12,7 +13,7 @@ with open("data.csv") as csvfile:
         if line:
             data_dict[datetime.datetime.fromisoformat(line[8])] = line
 
-with open("invalid.txt") as file:
+with open(paths.INVALID_MERSI_DATETIMES_PATH) as file:
     invalid = set([datetime.datetime.fromisoformat(date) for date in file.read().split()])
 
 
@@ -43,13 +44,13 @@ def get_by_dt(dt: datetime.datetime) -> MERSIInfo | None:
 
 def add_info(info: MERSIInfo):
     data.append(to_line(info))
-    with open("data.csv", "w", newline="") as file:
+    with open(paths.MERSI_DATA_PATH, "w", newline="") as file:
         csv.writer(file).writerows(data)
 
 
 def add_invalid(dt: datetime.datetime):
     invalid.add(dt)
-    with open("invalid.txt", "w") as file:
+    with open(paths.INVALID_MERSI_DATETIMES_PATH, "w") as file:
         file.write("\n".join([date.isoformat() for date in invalid]))
 
 
