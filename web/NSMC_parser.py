@@ -32,12 +32,15 @@ for pair in cookies_str.split("; "):
     session.cookies.set(key, value)
 
 
-def select_dt(dt: datetime.datetime) -> None:
+def select_dt(
+        dt: datetime.datetime,
+        data_type: DataType,
+) -> None:
     headers = {
         "Content-Type": "application/json;charset=utf-8",
     }
 
-    filename_fmt = "FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF"
+    filename_fmt = f"FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_{data_type.suffix()}_MS.HDF"
     post_data = {
         "filename": dt.strftime(filename_fmt),
         "ischecked": True,
