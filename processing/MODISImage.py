@@ -1,7 +1,6 @@
 from datetime import datetime
 
 import numpy as np
-import satpy
 from pyhdf.SD import SD
 
 from .SatelliteImage import SatelliteImage

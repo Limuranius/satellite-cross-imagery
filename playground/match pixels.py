@@ -1,5 +1,8 @@
 import pickle
+
+import numpy as np
 from matplotlib import pyplot as plt
+from scipy.stats import linregress
 
 from processing.MERSIImage import MERSIImage
 from processing.MODISImage import MODISImage
@@ -47,6 +50,19 @@ df = matching.matching_stats(img_mersi, img_modis, pixels)
 
 # plt.plot(df["mersi_rad"])
 # plt.plot(df["modis_rad"])
-plt.plot(df["mersi_rad"] / df["modis_rad"])
+# plt.plot(df["mersi_rad"] / df["modis_rad"])
+
+x = df["mersi_rad"].to_numpy().astype(float)
+y = df["modis_rad"].to_numpy().astype(float)
+
+mask = (np.abs(x - y) < 90) & (np.abs(x - y) > 40) & (x > 40)
+x = x[mask]
+y = y[mask]
+
+lin = linregress(x,y)
+plt.plot(x, y, "yo", markersize=2)
+plt.plot(x, x * lin.slope + lin.intercept, "--k")
+
+# plt.plot(np.abs(x - y))
 
 plt.show()

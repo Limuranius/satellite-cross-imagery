@@ -1,3 +1,6 @@
+import ftplib
+import os.path
+
 import requests
 from tqdm import tqdm
 
@@ -25,3 +28,42 @@ def download_file(
 
     if total_size != 0 and progress_bar.n != total_size:
         raise RuntimeError("Could not download file")
+
+
+def download_ftp(
+        url: str,
+        login: str,
+        password: str,
+        output_dir: str,
+):
+    ftp = ftplib.FTP(url)
+    ftp.login(login, password)
+
+    files = ftp.nlst()
+    wd = ftp.pwd()
+    os.makedirs(output_dir, exist_ok=True)
+
+    pbar = tqdm(unit="B", unit_scale=True, leave=False)
+
+    for filename in files:
+        file = open(os.path.join(output_dir, filename), "wb")
+
+        def callback(data):
+            file.write(data)
+            pbar.update(len(data))
+
+        ftp.retrbinary("RETR " + os.path.join(wd, filename), callback)
+
+        file.close()
+
+    pbar.close()
+
+
+def parse_ftp_url(url: str) -> tuple[str, str, str]:
+    """Example: ftp://A202410110283035887:mi2_B47K@ftp.nsmc.org.cn"""
+    url = url.lstrip("ftp://")
+    url = url.replace(":", "ඞ", 1)
+    url = url.replace("@", "ඞ", 1)
+    url = url.replace("/", "ඞ", 1)
+    login, password, url = url.split("ඞ")
+    return login, password, url

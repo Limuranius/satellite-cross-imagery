@@ -25,7 +25,7 @@ class MERSIInfo(Info):
         step = datetime.timedelta(minutes=5)
         dt = start
         result = []
-        with tqdm(total=(end - start).total_seconds() // 300) as pbar:
+        with tqdm(total=(end - start).total_seconds() // 300, desc="MERSI: find_containing_point") as pbar:
             while dt <= end:
                 if MERSI_database.has_dt(dt):
                     info = MERSI_database.get_by_dt(dt)
