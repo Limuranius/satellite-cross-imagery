@@ -56,14 +56,18 @@ class MERSIImage(SatelliteImage):
             self.longitude = hdf_geo["Geolocation"]["Longitude"][:]
             self.sensor_zenith = hdf_geo["Geolocation"]["SensorZenith"][:]
 
-            date_str = hdf.attrs["Data Creating Date"].decode()
-            time_str = hdf.attrs["Data Creating Time"].decode().split(".")[0]
+            date_str = hdf.attrs["Observing Beginning Date"].decode()
+            time_str = hdf.attrs["Observing Beginning Time"].decode().split(".")[0]
             date = datetime.strptime(date_str, "%Y-%m-%d").date()
             time = datetime.strptime(time_str, "%H:%M:%S").time()
             self.dt = datetime.combine(date, time)
 
             band_index = BANDS.index(band)
-            counts = hdf["Data"]["EV_1KM_RefSB"][band_index][:, :-4]
+            counts = hdf["Data"]["EV_1KM_RefSB"][band_index][:]
+
+            # Fix broken pixels
+            counts[counts == 65535] = 0
+
             vis_cal = hdf["Calibration"]["VIS_Cal_Coeff"]
 
             Cal_0, Cal_1, Cal_2 = vis_cal[band_index]

@@ -1,44 +1,64 @@
-import pickle
 import matplotlib.pyplot as plt
 import numpy as np
-from zarr import zeros
+import pandas as pd
+import tqdm
+from global_land_mask import globe
 
 from processing.MERSIImage import MERSIImage
 from processing.MODISImage import MODISImage
-from global_land_mask import globe
-import tqdm
 
 
 def get_matching_pixels(
         image_mersi: MERSIImage,
         image_modis: MODISImage,
-        max_zenith_diff: int
+) -> list[tuple[int, int], tuple[int, int]]:
+    coords = np.array([image_mersi.longitude, image_mersi.latitude])
+    coords = coords.transpose((1, 2, 0))
+    coords = coords.reshape((-1, 2))  # flatten
+    fast_match = image_modis.geo_kdtree.query(coords)
+    distance, indices = fast_match
+
+    max_distance = 0.03
+
+    result = []
+    for i in range(len(indices)):
+        if distance[i] > max_distance:
+            continue
+        mersi_i, mersi_j = np.unravel_index(i, image_mersi.latitude.shape)
+        modis_i, modis_j = np.unravel_index(indices[i], image_modis.latitude.shape)
+        result.append(((mersi_i, mersi_j), (modis_i, modis_j)))
+    return result
+
+
+def filter_matching_pixels(
+        image_mersi: MERSIImage,
+        image_modis: MODISImage,
+        pixels: list[tuple[int, int], tuple[int, int]],
+        max_zenith_diff: int,
+        max_zenith: int,
 ) -> list[tuple[int, int], tuple[int, int]]:
     result = []
-    with tqdm.tqdm(total=2000 * 2048, desc="Searching for matching pixels") as pbar:
-        for i in range(2000):  # MERSI height
-            for j in range(2048):  # MERSI width
-                pbar.update(1)
 
-                lon = image_mersi.longitude[i, j]
-                lat = image_mersi.latitude[i, j]
+    for mersi_coord, modis_coord in tqdm.tqdm(pixels, desc="Filtering matching pixels"):
+        lon = image_mersi.longitude[*mersi_coord]
+        lat = image_mersi.latitude[*mersi_coord]
 
-                # Skip pixels that don't contain water
-                if globe.is_land(lat, lon):
-                    continue
+        # Check cloud mask
+        if image_modis.cloud_mask[*modis_coord] != 3:
+            continue
 
-                # Find matching pixel in other image
-                if not image_modis.contains_pos(lon, lat):
-                    continue
-                modis_i, modis_j = image_modis.get_closest_pixel(lon, lat)
+        # Check zenith difference
+        zenith_mersi = image_mersi.sensor_zenith[*mersi_coord]
+        zenith_modis = image_modis.sensor_zenith[*modis_coord]
+        if abs(zenith_modis - zenith_mersi) > max_zenith_diff or zenith_mersi > max_zenith:
+            continue
 
-                # Check zenith difference
-                zenith_mersi = image_mersi.sensor_zenith[i, j]
-                zenith_modis = image_modis.sensor_zenith[modis_i, modis_j]
-                if abs(zenith_modis - zenith_mersi) > max_zenith_diff:
-                    continue
+        # Skip pixels that don't contain water
+        if globe.is_land(lat, lon):
+            continue
 
-                result.append(((i, j), (modis_i, modis_j)))
+        result.append((mersi_coord, modis_coord))
+
     return result
 
 
@@ -68,28 +88,21 @@ def visualize_matching_pixels(
     plt.show()
 
 
-
-img_mersi = MERSIImage(
-    "/home/gleb123/satellite-cross-imagery/imagery/MERSI-2/L1/FY3D_MERSI_GBAL_L1_20240912_0350_1000M_MS.HDF",
-    "/home/gleb123/satellite-cross-imagery/imagery/MERSI-2/L1 GEO/FY3D_MERSI_GBAL_L1_20240912_0350_GEO1K_MS.HDF",
-    "8",
-)
-
-img_modis = MODISImage(
-    "/home/gleb123/satellite-cross-imagery/imagery/MODIS/L1B/MYD021KM.A2024256.0345.061.2024256152131.hdf",
-    "8"
-)
-
-with open("pixels.pkl", "rb") as file:
-    pixels = pickle.load(file)
-
-visualize_matching_pixels(
-    img_mersi,
-    img_modis,
-    pixels
-)
-
-# pixels = get_matching_pixels(img_mersi, img_modis, 100)
-# print(len(pixels))
-# with open("pixels.pkl", "wb") as file:
-#     pickle.dump(pixels, file)
+def matching_stats(
+        image_mersi: MERSIImage,
+        image_modis: MODISImage,
+        pixels: list[tuple[int, int], tuple[int, int]]
+) -> pd.DataFrame:
+    df = pd.DataFrame(
+        index=range(len(pixels)),
+        columns=["mersi_rad", "modis_rad", "rad_diff", "mersi_senz", "modis_senz"]
+    )
+    for i, (mersi_coord, modis_coord) in tqdm.tqdm(list(enumerate(pixels)), desc="Creating statistics"):
+        df.loc[i] = {
+            "mersi_rad": image_mersi.radiance[*mersi_coord],
+            "modis_rad": image_modis.radiance[*modis_coord],
+            "rad_diff": image_mersi.radiance[*mersi_coord] - image_modis.radiance[*modis_coord],
+            "mersi_senz": image_mersi.sensor_zenith[*mersi_coord],
+            "modis_senz": image_modis.sensor_zenith[*modis_coord],
+        }
+    return df

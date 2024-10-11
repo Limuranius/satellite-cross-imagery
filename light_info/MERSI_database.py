@@ -24,7 +24,8 @@ def parse_line(line) -> MERSIInfo:
         (float(line[4]), float(line[5])),
         (float(line[6]), float(line[7])),
         datetime.datetime.fromisoformat(line[8]),
-        "FY-3D"
+        "FY-3D",
+        ""
     )
 
 

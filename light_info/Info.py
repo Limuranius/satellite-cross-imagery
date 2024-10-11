@@ -20,7 +20,7 @@ class Info(ABC):
     dt: datetime.datetime
     satellite: str
 
-    filename: str = None
+    filename: str
 
     def contains_pos(self, lon: float, lat: float) -> bool:
         if lon < 0:

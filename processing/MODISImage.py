@@ -27,15 +27,24 @@ BANDS_WAVELEN = {
 
 
 class MODISImage(SatelliteImage):
-    def __init__(self, file_path: str, band: str):
+    """
+        00 = cloudy
+        01 = uncertain clear
+        10 = probably clear
+        11 = confident clear
+    """
+    cloud_mask: np.ndarray
+
+    def __init__(self, file_path: str, geo_path: str, band: str):
         self.file_path = file_path
         self.band = band
         self.wavelength = BANDS_WAVELEN[band]
         hdf = SD(file_path)
+        geo_hdf = SD(geo_path)
 
-        self.latitude = hdf.select("Latitude")[:]
-        self.longitude = hdf.select("Longitude")[:]
-        self.sensor_zenith = hdf.select("SensorZenith")[:]
+        self.latitude = geo_hdf.select("Latitude")[:]
+        self.longitude = geo_hdf.select("Longitude")[:]
+        self.sensor_zenith = geo_hdf.select("SensorZenith")[:]
 
         RefSB = hdf.select("EV_1KM_RefSB")
         radiance_scales = RefSB.attributes()["radiance_scales"]
@@ -43,6 +52,16 @@ class MODISImage(SatelliteImage):
         self.radiance = (RefSB[:][0].astype(float) - radiance_offsets[0]) * radiance_scales[0]
 
         self.dt = extract_datetime(hdf.attributes()["CoreMetadata.0"])
+
+        self.create_kdtree()
+
+    def load_cloud_mask(self, path: str):
+        hdf = SD(path)
+        cloud_mask = hdf.select("Cloud_Mask")[:]
+        cloud_mask = cloud_mask[0]
+        cloud_mask &= int("110", 2)
+        cloud_mask >>= 1
+        self.cloud_mask = cloud_mask
 
 
 def extract_date_str(meta):

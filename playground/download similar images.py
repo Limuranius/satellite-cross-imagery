@@ -20,5 +20,10 @@ pairs = [pair for pair in pairs if intersection_percent(*pair) > MIN_INTERSECTIO
 list_modis = [pair[0] for pair in pairs]
 list_mersi = [pair[1] for pair in pairs]
 
-download_mersi_files(list_mersi, download_l1_geo=True)
-download_modis_files(list_modis)
+# download_mersi_files(list_mersi, download_l1_geo=True)
+download_modis_files(
+    list_modis,
+    download_l1=False,
+    download_l1_geo=False,
+    download_cloud_mask=True
+)

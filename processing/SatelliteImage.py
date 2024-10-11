@@ -1,13 +1,12 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from datetime import datetime
 
 import numpy as np
 
-import satpy
-
 from custom_types import LonLat
 from utils import geopoint_inside_polygon
 
+from scipy.spatial import KDTree
 
 class SatelliteImage(ABC):
     file_path: str
@@ -22,6 +21,14 @@ class SatelliteImage(ABC):
     band: str
     wavelength: int
 
+    geo_kdtree: KDTree
+
+    def create_kdtree(self):
+        coords = np.array([self.longitude, self.latitude])
+        coords = coords.transpose((1, 2, 0))
+        coords = coords.reshape((-1, 2))  # flatten
+        self.geo_kdtree = KDTree(coords)
+
     def get_corners_coords(self) -> tuple[LonLat, LonLat, LonLat, LonLat]:
         # Returns geo-coordinates of corners of image (longitude, latitude)
         tl = (self.longitude[0, 0], self.latitude[0, 0])
@@ -31,12 +38,8 @@ class SatelliteImage(ABC):
         return tl, tr, br, bl
 
     def get_closest_pixel(self, lon: float, lat: float) -> tuple[int, int]:
-        # Returns raster coordinates of pixel closest to (lat, lon)
-        distance = (
-                np.abs(self.latitude - lat) ** 2
-                + np.abs(self.longitude - lon) ** 2
-        )
-        i, j = np.unravel_index(distance.argmin(), distance.shape)
+        distance, index = self.geo_kdtree.query((lon, lat))
+        i, j = np.unravel_index(index, self.latitude.shape)
         return i, j
 
     def contains_pos(self, lon: float, lat: float) -> bool:

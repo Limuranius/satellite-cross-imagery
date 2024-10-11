@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import requests
 
@@ -10,7 +10,13 @@ from .Info import Info
 
 @dataclass
 class MODISInfo(Info):
-    fileURL: str = None
+    fileURL: str
+
+    geo_filename: str
+    geo_file_url: str
+
+    cloud_mask_filename: str
+    cloud_mask_file_url: str
 
     @classmethod
     def find_containing_point(
@@ -26,6 +32,12 @@ class MODISInfo(Info):
     def get_file_url(self) -> str:
         return "https://ladsweb.modaps.eosdis.nasa.gov" + self.fileURL
 
+    def get_geo_file_url(self) -> str:
+        return "https://ladsweb.modaps.eosdis.nasa.gov" + self.geo_file_url
+
+    def get_cloud_mask_file_url(self) -> str:
+        return "https://ladsweb.modaps.eosdis.nasa.gov" + self.cloud_mask_file_url
+
 
 def find_inside_area(
         start: datetime.date,
@@ -35,24 +47,33 @@ def find_inside_area(
         e: float,
         s: float,
 ) -> list[MODISInfo]:
-    url_fmt = ("https://ladsweb.modaps.eosdis.nasa.gov/api/v1/files/product=MYD021KM&collection=61"
+    url = ("https://ladsweb.modaps.eosdis.nasa.gov/api/v1/files/product=MYD021KM&collection=61"
                f"&dateRanges={start.isoformat()}..{end.isoformat()}"
                f"&areaOfInterest=x{w}y{n},x{e}y{s}"
                "&dayCoverage=true"
                "&dnboundCoverage=true")
+    geo_url = url.replace("MYD021KM", "MYD03")
+    cloud_mask_url = url.replace("MYD021KM", "MYD35_L2")
 
-    r = requests.get(url_fmt)
+    r = requests.get(url)
+    r_geo = requests.get(geo_url)
+    r_cloud_mask = requests.get(cloud_mask_url)
 
     result = []
-    for r in r.json().values():
+    for img_info, geo_info, cloud_mask_info in zip(r.json().values(), r_geo.json().values(), r_cloud_mask.json().values()):
+        assert datetime.datetime.fromisoformat(img_info["start"]) == datetime.datetime.fromisoformat(geo_info["start"])
         result.append(MODISInfo(
-            p1=(float(r["GRingLongitude1"]), float(r["GRingLatitude1"])),
-            p2=(float(r["GRingLongitude2"]), float(r["GRingLatitude2"])),
-            p3=(float(r["GRingLongitude3"]), float(r["GRingLatitude3"])),
-            p4=(float(r["GRingLongitude4"]), float(r["GRingLatitude4"])),
-            dt=datetime.datetime.fromisoformat(r["start"]),
+            p1=(float(img_info["GRingLongitude1"]), float(img_info["GRingLatitude1"])),
+            p2=(float(img_info["GRingLongitude2"]), float(img_info["GRingLatitude2"])),
+            p3=(float(img_info["GRingLongitude3"]), float(img_info["GRingLatitude3"])),
+            p4=(float(img_info["GRingLongitude4"]), float(img_info["GRingLatitude4"])),
+            dt=datetime.datetime.fromisoformat(img_info["start"]),
             satellite="MODIS AQUA",
-            filename=r["name"],
-            fileURL=r["fileURL"]
+            filename=img_info["name"],
+            fileURL=img_info["fileURL"],
+            geo_filename=geo_info["name"],
+            geo_file_url=geo_info["fileURL"],
+            cloud_mask_filename=cloud_mask_info["name"],
+            cloud_mask_file_url=cloud_mask_info["fileURL"]
         ))
     return result
