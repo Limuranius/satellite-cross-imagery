@@ -63,17 +63,17 @@ class MERSIImage(SatelliteImage):
             self.dt = datetime.combine(date, time)
 
             band_index = BANDS.index(band)
-            counts = hdf["Data"]["EV_1KM_RefSB"][band_index][:]
+            self.counts = hdf["Data"]["EV_1KM_RefSB"][band_index][:]
 
             # Fix broken pixels
-            counts[counts == 65535] = 0
+            self.counts[self.counts == 65535] = 0
 
             vis_cal = hdf["Calibration"]["VIS_Cal_Coeff"]
 
             Cal_0, Cal_1, Cal_2 = vis_cal[band_index]
             Slope = 1
             Intercept = 0
-            dn = counts * Slope + Intercept
+            dn = self.counts * Slope + Intercept
             Ref = Cal_2 * dn ** 2 + Cal_1 * dn + Cal_0
 
             self.radiance = Ref / 100 * E0[band] / pi

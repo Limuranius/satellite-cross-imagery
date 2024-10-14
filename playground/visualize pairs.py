@@ -1,26 +1,25 @@
 import datetime
 
-import folium
 
 from aeronet import stations_positions
 from light_info.MERSIInfo import MERSIInfo
+import folium
 from light_info.MODISInfo import MODISInfo
-from light_info.Info import Info
 from light_info.utils import find_close_imgs, intersection_percent
 from utils import random_color, reverse_coords, fix_antimeridian
 
-
-START = datetime.date(2024, 9, 1)
-END = datetime.date(2024, 9, 27)
+START = datetime.date(2019, 9, 1)
+END = datetime.date(2019, 10, 1)
 LON, LAT, _ = stations_positions.positions["Ieodo_Station"]
 MIN_INTERSECTION_PERCENT = 0.3
-MAX_TIME_DELTA = datetime.timedelta(minutes=30)
+MAX_TIME_DELTA = datetime.timedelta(minutes=10)
 
 list_modis = MODISInfo.find_containing_point(START, END, LON, LAT)
 list_mersi = MERSIInfo.find_containing_point(START, END, LON, LAT)
 
 pairs = find_close_imgs(list_modis, list_mersi, MAX_TIME_DELTA)
 pairs = [pair for pair in pairs if intersection_percent(*pair) > MIN_INTERSECTION_PERCENT]
+pairs = pairs[:1]
 
 list_modis = [pair[0] for pair in pairs]
 list_mersi = [pair[1] for pair in pairs]

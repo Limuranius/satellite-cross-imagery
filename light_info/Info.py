@@ -32,10 +32,9 @@ class Info(ABC):
             corners
         )
 
-    @classmethod
+    @staticmethod
     @abstractmethod
     def find_containing_point(
-            cls,
             start: datetime.date,
             end: datetime.date,
             lon: float,

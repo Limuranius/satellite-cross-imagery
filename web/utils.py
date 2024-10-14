@@ -20,7 +20,7 @@ def download_file(
     total_size = int(response.headers.get("content-length", 0))
     block_size = 1024
 
-    with tqdm(total=total_size, unit="B", unit_scale=True, leave=False) as progress_bar:
+    with tqdm(total=total_size, unit="B", unit_scale=True) as progress_bar:
         with open(output_path, "wb") as file:
             for data in response.iter_content(block_size):
                 progress_bar.update(len(data))
@@ -43,7 +43,7 @@ def download_ftp(
     wd = ftp.pwd()
     os.makedirs(output_dir, exist_ok=True)
 
-    pbar = tqdm(unit="B", unit_scale=True, leave=False)
+    pbar = tqdm(unit="B", unit_scale=True)
 
     for filename in files:
         file = open(os.path.join(output_dir, filename), "wb")
@@ -66,4 +66,4 @@ def parse_ftp_url(url: str) -> tuple[str, str, str]:
     url = url.replace("@", "ඞ", 1)
     url = url.replace("/", "ඞ", 1)
     login, password, url = url.split("ඞ")
-    return login, password, url
+    return url, login, password

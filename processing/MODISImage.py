@@ -48,7 +48,8 @@ class MODISImage(SatelliteImage):
         RefSB = hdf.select("EV_1KM_RefSB")
         radiance_scales = RefSB.attributes()["radiance_scales"]
         radiance_offsets = RefSB.attributes()["radiance_offsets"]
-        self.radiance = (RefSB[:][0].astype(float) - radiance_offsets[0]) * radiance_scales[0]
+        band_index = BANDS.index(band)
+        self.radiance = (RefSB[:][band_index].astype(float) - radiance_offsets[band_index]) * radiance_scales[band_index]
 
         self.dt = extract_datetime(hdf.attributes()["CoreMetadata.0"])
 

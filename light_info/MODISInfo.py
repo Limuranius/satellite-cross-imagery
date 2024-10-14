@@ -18,9 +18,8 @@ class MODISInfo(Info):
     cloud_mask_filename: str
     cloud_mask_file_url: str
 
-    @classmethod
+    @staticmethod
     def find_containing_point(
-            cls,
             start: dt.date,
             end: dt.date,
             lon: float,

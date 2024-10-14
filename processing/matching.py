@@ -95,7 +95,7 @@ def matching_stats(
 ) -> pd.DataFrame:
     df = pd.DataFrame(
         index=range(len(pixels)),
-        columns=["mersi_rad", "modis_rad", "rad_diff", "mersi_senz", "modis_senz"]
+        columns=["mersi_rad", "modis_rad", "rad_diff", "mersi_senz", "modis_senz", "mersi_counts"]
     )
     for i, (mersi_coord, modis_coord) in tqdm.tqdm(list(enumerate(pixels)), desc="Creating statistics"):
         df.loc[i] = {
@@ -104,5 +104,6 @@ def matching_stats(
             "rad_diff": image_mersi.radiance[*mersi_coord] - image_modis.radiance[*modis_coord],
             "mersi_senz": image_mersi.sensor_zenith[*mersi_coord],
             "modis_senz": image_modis.sensor_zenith[*modis_coord],
+            "mersi_counts": image_mersi.counts[*mersi_coord],
         }
     return df

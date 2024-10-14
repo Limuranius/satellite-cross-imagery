@@ -1,10 +1,10 @@
 import os
 from collections import defaultdict
 from datetime import datetime, timedelta
+
 from pyhdf.SD import SD
 
 import paths
-import glob
 from .MODISImage import extract_datetime
 
 
@@ -20,6 +20,7 @@ def get_mersi_file_dt(file_path: str) -> datetime:
         filename_parts[4] + filename_parts[5],
         dt_fmt
     )
+
 
 def group_by_time(max_timedelta: timedelta):
     mersi_groups = defaultdict(list)
@@ -63,7 +64,3 @@ def group_by_time(max_timedelta: timedelta):
             else:
                 l2.pop(0)
     return result
-
-
-
-

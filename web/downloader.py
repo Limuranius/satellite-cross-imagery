@@ -33,7 +33,7 @@ def download_modis_files(
         download_l1_geo=False,
         download_cloud_mask=False,
 ):
-    for info in tqdm(infos, desc="Downloading MODIS images"):
+    for info in infos:
         if download_l1:
             NASA_parser.download_image(info)
         if download_l1_geo:

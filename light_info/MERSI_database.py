@@ -48,6 +48,12 @@ def add_info(info: MERSIInfo):
     with open(paths.MERSI_DATA_PATH, "w", newline="") as file:
         csv.writer(file).writerows(data)
 
+def add_batch(infos: list[MERSIInfo]):
+    for info in infos:
+        data.append(to_line(info))
+    with open(paths.MERSI_DATA_PATH, "w", newline="") as file:
+        csv.writer(file).writerows(data)
+
 
 def add_invalid(dt: datetime.datetime):
     invalid.add(dt)
