@@ -1,9 +1,13 @@
+import os.path
+import pickle
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import tqdm
 from global_land_mask import globe
 
+import paths
 from processing.MERSIImage import MERSIImage
 from processing.MODISImage import MODISImage
 
@@ -15,7 +19,9 @@ def get_matching_pixels(
     coords = np.array([image_mersi.longitude, image_mersi.latitude])
     coords = coords.transpose((1, 2, 0))
     coords = coords.reshape((-1, 2))  # flatten
+    print("Matching pixels...")
     fast_match = image_modis.geo_kdtree.query(coords)
+    print("Done...")
     distance, indices = fast_match
 
     max_distance = 0.03
@@ -107,3 +113,38 @@ def matching_stats(
             "mersi_counts": image_mersi.counts[*mersi_coord],
         }
     return df
+
+
+def save_matching_pixels(
+        image_mersi: MERSIImage,
+        image_modis: MODISImage,
+        pixels: list[tuple[int, int], tuple[int, int]]
+) -> None:
+    fmt = "%Y%m%d%H%M"
+    filename = "{mersi_dt} {modis_dt}.pkl".format(
+        mersi_dt=image_mersi.dt.strftime(fmt),
+        modis_dt=image_modis.dt.strftime(fmt),
+    )
+    file_path = os.path.join(paths.MATCHING_PIXELS_DIR, filename)
+    with open(file_path, "wb") as file:
+        pickle.dump(pixels, file)
+
+
+def load_matching_pixels(
+        image_mersi: MERSIImage,
+        image_modis: MODISImage,
+) -> list[tuple[int, int], tuple[int, int]]:
+    fmt = "%Y%m%d%H%M"
+    filename = "{mersi_dt} {modis_dt}.pkl".format(
+        mersi_dt=image_mersi.dt.strftime(fmt),
+        modis_dt=image_modis.dt.strftime(fmt),
+    )
+    file_path = os.path.join(paths.MATCHING_PIXELS_DIR, filename)
+    if os.path.exists(file_path):
+        with open(file_path, "wb") as file:
+            return pickle.load(file)
+    else:
+        pixels = get_matching_pixels(image_mersi, image_modis)
+        pixels = filter_matching_pixels(image_mersi, image_modis, pixels, max_zenith_diff=1000, max_zenith=4500)
+        save_matching_pixels(image_mersi, image_modis, pixels)
+        return pixels

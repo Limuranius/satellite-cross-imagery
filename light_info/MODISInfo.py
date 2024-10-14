@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import itertools
 from dataclasses import dataclass, field
 
 import requests
@@ -62,16 +63,22 @@ def find_inside_area(
     json_geo = r_geo.json()
     json_cloud_mask = r_cloud_mask.json()
 
-    items_l1b = json_l1b.values()
-    items_geo = json_geo.values()
-    items_cloud_mask = json_cloud_mask.values()
+    items_l1b = list(json_l1b.values())
+    items_geo = list(json_geo.values())
+    items_cloud_mask = list(json_cloud_mask.values())
 
-    items_l1b = sorted(items_l1b, key=lambda x: dt.datetime.fromisoformat(x["start"]))
-    items_geo = sorted(items_geo, key=lambda x: dt.datetime.fromisoformat(x["start"]))
-    items_cloud_mask = sorted(items_cloud_mask, key=lambda x: dt.datetime.fromisoformat(x["start"]))
-
+    items = items_l1b + items_geo + items_cloud_mask
+    items = sorted(items, key=lambda x: dt.datetime.fromisoformat(x["start"]))
+    groups = itertools.groupby(
+        items,
+        key=lambda x: x["start"],
+    )
     result = []
-    for img_info, geo_info, cloud_mask_info in zip(items_l1b, items_geo, items_cloud_mask):
+    for info_dt, group in groups:
+        group = list(group)
+        if len(group) != 3:
+            continue
+        img_info, geo_info, cloud_mask_info = group
         assert dt.datetime.fromisoformat(img_info["start"]) == dt.datetime.fromisoformat(
             geo_info["start"]) == dt.datetime.fromisoformat(cloud_mask_info["start"])
         result.append(MODISInfo(

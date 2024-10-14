@@ -14,6 +14,8 @@ MERSI_DIR = join(IMAGERY_DIR, "MERSI-2")
 MERSI_L1_DIR = join(MERSI_DIR, "L1")
 MERSI_L1_GEO_DIR = join(MERSI_DIR, "L1 GEO")
 
+MATCHING_PIXELS_DIR = join(IMAGERY_DIR, "matching pixels")
+
 for dir_path in [
     MODIS_L1B_DIR,
     MODIS_L1B_GEO_DIR,
@@ -21,5 +23,7 @@ for dir_path in [
 
     MERSI_L1_DIR,
     MERSI_L1_GEO_DIR,
+
+    MATCHING_PIXELS_DIR,
 ]:
     os.makedirs(dir_path, exist_ok=True)

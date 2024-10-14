@@ -3,8 +3,12 @@ from __future__ import annotations
 import datetime
 import json
 from dataclasses import dataclass
+from io import BytesIO
 
 import grequests
+import numpy as np
+import requests
+from PIL import Image
 from tqdm import tqdm
 
 from .Info import Info
@@ -87,13 +91,23 @@ class MERSIInfo(Info):
                 timeout=5,
             ))
         responses = []
+        timeout_count = 0
         for i, resp in tqdm(
-                grequests.imap_enumerated(rs, size=100),
+                grequests.imap_enumerated(rs, size=500),
                 total=len(rs),
                 desc="Requesting imagery info from NSMC website"
         ):
-            if resp is None:
+            if resp is None:  # Timeout
+                timeout_count += 1
                 continue
             info = MERSIInfo.__parse_response_text(resp.text, dts[i])
             responses.append(info)
+        print("Timeouts:", timeout_count)
         return responses
+
+    def get_preview(self) -> np.ndarray:
+        url_fmt = "https://img.nsmc.org.cn/IMG_LIB/FY3D/FY3D_MERSI_GBAL_L1_YYYYMMDD_HHmm_1000M_MS.HDF/%Y%m%d/FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF.jpg"
+        image_url = self.dt.strftime(url_fmt)
+        img_resp = requests.get(image_url)
+        img = Image.open(BytesIO(img_resp.content))
+        return np.array(img)

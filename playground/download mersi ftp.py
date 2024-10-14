@@ -5,10 +5,10 @@ import shutil
 
 DOWNLOADS_DIR = "downloads"
 
-# # Downloading files
-# ftp_url = input("Enter FTP url: ")
-# url, login, password = parse_ftp_url("ftp://A202410140463397041:hHS_5BCS@ftp.nsmc.org.cn")
-# download_ftp(url, login, password, DOWNLOADS_DIR)
+# Downloading files
+ftp_url = input("Enter FTP url: ")
+url, login, password = parse_ftp_url(ftp_url)
+download_ftp(url, login, password, DOWNLOADS_DIR)
 
 # Distributing files to folders
 for file in os.listdir(DOWNLOADS_DIR):
