@@ -2,6 +2,7 @@ from datetime import datetime
 from math import pi
 
 import h5py
+import numpy as np
 
 from .SatelliteImage import SatelliteImage
 
@@ -47,6 +48,9 @@ E0 = {
 
 
 class MERSIImage(SatelliteImage):
+    blackbody: np.ndarray
+    space_view: np.ndarray
+
     def __init__(self, file_path: str, geo_path: str, band: str):
         self.band = band
         self.wavelength = BANDS_WAVELEN[band]
@@ -55,6 +59,7 @@ class MERSIImage(SatelliteImage):
             self.latitude = hdf_geo["Geolocation"]["Latitude"][:]
             self.longitude = hdf_geo["Geolocation"]["Longitude"][:]
             self.sensor_zenith = hdf_geo["Geolocation"]["SensorZenith"][:]
+            self.solar_zenith = hdf_geo["Geolocation"]["SolarZenith"][:]
 
             date_str = hdf.attrs["Observing Beginning Date"].decode()
             time_str = hdf.attrs["Observing Beginning Time"].decode().split(".")[0]
@@ -69,11 +74,17 @@ class MERSIImage(SatelliteImage):
             self.counts[self.counts == 65535] = 0
 
             vis_cal = hdf["Calibration"]["VIS_Cal_Coeff"]
+            self.blackbody = hdf["Calibration"]["BB_DN_average"][band_index + 5]
+            self.space_view = hdf["Calibration"]["SV_DN_average"][band_index + 5]
+            self.voc = hdf["Calibration"]["VOC_DN_average"][band_index + 5]
+            blackbody_column = np.repeat(self.blackbody, 10).reshape((-1, 1))
 
             Cal_0, Cal_1, Cal_2 = vis_cal[band_index]
             Slope = 1
             Intercept = 0
-            dn = self.counts * Slope + Intercept
+            dn = (self.counts - blackbody_column) * Slope + Intercept
             Ref = Cal_2 * dn ** 2 + Cal_1 * dn + Cal_0
 
             self.radiance = Ref / 100 * E0[band] / pi
+            self.reflectance = Ref / 100 * hdf.attrs["EarthSun Distance Ratio"] / np.cos(np.radians(self.solar_zenith / 100))
+

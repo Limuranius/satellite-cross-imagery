@@ -63,4 +63,5 @@ def group_by_time(max_timedelta: timedelta):
                 l1.pop(0)
             else:
                 l2.pop(0)
+    result = [pair for pair in result if len(pair[0]) == 2 and len(pair[1]) == 3]
     return result

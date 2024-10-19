@@ -14,7 +14,9 @@ class SatelliteImage(ABC):
     latitude: np.ndarray
     longitude: np.ndarray
     radiance: np.ndarray
+    reflectance: np.ndarray
     sensor_zenith: np.ndarray
+    solar_zenith: np.ndarray
 
     dt: datetime
 

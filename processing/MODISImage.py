@@ -33,6 +33,7 @@ class MODISImage(SatelliteImage):
         11 = confident clear
     """
     cloud_mask: np.ndarray
+    scaled_integers: np.ndarray
 
     def __init__(self, file_path: str, geo_path: str, band: str):
         self.file_path = file_path
@@ -44,12 +45,17 @@ class MODISImage(SatelliteImage):
         self.latitude = geo_hdf.select("Latitude")[:]
         self.longitude = geo_hdf.select("Longitude")[:]
         self.sensor_zenith = geo_hdf.select("SensorZenith")[:]
+        self.solar_zenith = geo_hdf.select("SolarZenith")[:]
 
         RefSB = hdf.select("EV_1KM_RefSB")
         radiance_scales = RefSB.attributes()["radiance_scales"]
         radiance_offsets = RefSB.attributes()["radiance_offsets"]
+        reflectance_scales = RefSB.attributes()["reflectance_scales"]
+        reflectance_offsets = RefSB.attributes()["reflectance_offsets"]
         band_index = BANDS.index(band)
+        self.scaled_integers = RefSB[:][band_index]
         self.radiance = (RefSB[:][band_index].astype(float) - radiance_offsets[band_index]) * radiance_scales[band_index]
+        self.reflectance = (RefSB[:][band_index].astype(float) - reflectance_offsets[band_index]) * reflectance_scales[band_index]
 
         self.dt = extract_datetime(hdf.attributes()["CoreMetadata.0"])
 
