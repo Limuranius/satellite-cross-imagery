@@ -1,4 +1,5 @@
 import random
+from datetime import datetime, timedelta
 
 import shapely
 from geojson import Point, Polygon, Feature
@@ -48,3 +49,10 @@ def intersection_percent(
     poly2 = shapely.Polygon(shell=poly2)
     inter = poly1.intersection(poly2)
     return inter.area / (poly1.area + poly2.area - inter.area)
+
+
+def datetime_range(start: datetime, end: datetime, step: timedelta = timedelta(minutes=5)):
+    curr = start
+    while curr <= end:
+        yield curr
+        curr += step

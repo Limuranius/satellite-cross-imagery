@@ -34,10 +34,9 @@ class Info(ABC):
 
     @staticmethod
     @abstractmethod
-    def find_containing_point(
+    def find(
             start: datetime.date,
             end: datetime.date,
-            lon: float,
-            lat: float,
+            point: LonLat = None
     ) -> list[Info]:
         pass

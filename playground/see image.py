@@ -1,21 +1,47 @@
+from datetime import timedelta
+from typing import Counter
+
 import matplotlib.pyplot as plt
 
-from processing import MODISImage
+from processing.MERSIImage import MERSIImage
+from processing.MODISImage import MODISImage
+from processing.preprocessing import group_by_time
 
-fig, ax = plt.subplots(nrows=4, ncols=4)
+# [4, 5, 7, 8, 9]
 
-for k, band in enumerate(MODISImage.BANDS):
-    i = k // 4
-    j = k % 4
+index = 8
 
-    img_modis = MODISImage.MODISImage(
-        "/home/gleb123/satellite-cross-imagery/imagery/MODIS/L1B/MYD021KM.A2024256.0345.061.2024256152131.hdf",
-        "/home/gleb123/satellite-cross-imagery/imagery/MODIS/L1B GEO/MYD03.A2024256.0345.061.2024256151418.hdf",
-        band,
-    )
+groups = group_by_time(timedelta(minutes=30))
+(MERSI_L1_PATH, MERSI_L1_GEO_PATH), (MODIS_L1_PATH, MODIS_L1_GEO_PATH, MODIS_CLOUD_MASK_PATH) = groups[index]
+modis = MODISImage(
+    MODIS_L1_PATH,
+    MODIS_L1_GEO_PATH,
+    "10"
+)
+mersi = MERSIImage(
+    MERSI_L1_PATH,
+    MERSI_L1_GEO_PATH,
+    "10"
+)
+img = modis.scaled_integers
 
-    ax[i][j].imshow(img_modis.radiance)
-    ax[i][j].set_title(band)
+def format_coord(x, y):
+    col = round(x)
+    row = round(y)
+    nrows, ncols = img.shape
+    if 0 <= col < ncols and 0 <= row < nrows:
+        z = img[row, col]
+        return f'x={col}, y={row}, z={int(z)}'
+    else:
+        return f'x={col}, y={row}'
 
+
+print(Counter(img[img > 2**15]))
+
+fig, ax = plt.subplots()
+ax.imshow(img, cmap="gray",
+           # vmin=400,
+           # vmax=600
+           )
+ax.format_coord = format_coord
 plt.show()
-

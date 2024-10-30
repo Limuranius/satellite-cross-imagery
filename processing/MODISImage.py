@@ -34,6 +34,7 @@ class MODISImage(SatelliteImage):
     """
     cloud_mask: np.ndarray
     scaled_integers: np.ndarray
+    water_mask: np.ndarray
 
     def __init__(self, file_path: str, geo_path: str, band: str):
         self.file_path = file_path
@@ -54,8 +55,15 @@ class MODISImage(SatelliteImage):
         reflectance_offsets = RefSB.attributes()["reflectance_offsets"]
         band_index = BANDS.index(band)
         self.scaled_integers = RefSB[:][band_index]
-        self.radiance = (RefSB[:][band_index].astype(float) - radiance_offsets[band_index]) * radiance_scales[band_index]
-        self.reflectance = (RefSB[:][band_index].astype(float) - reflectance_offsets[band_index]) * reflectance_scales[band_index]
+        self.radiance = (RefSB[:][band_index].astype(float) - radiance_offsets[band_index]) * radiance_scales[
+            band_index]
+        self.reflectance = (RefSB[:][band_index].astype(float) - reflectance_offsets[band_index]) * reflectance_scales[
+            band_index]
+
+        water_mask_band = BANDS.index("17")
+        water_mask_radiance = (RefSB[:][water_mask_band].astype(float) - radiance_offsets[water_mask_band]) * \
+                              radiance_scales[water_mask_band]
+        self.water_mask = water_mask_radiance < 20.0
 
         self.dt = extract_datetime(hdf.attributes()["CoreMetadata.0"])
 
@@ -68,6 +76,19 @@ class MODISImage(SatelliteImage):
         cloud_mask &= int("110", 2)
         cloud_mask >>= 1
         self.cloud_mask = cloud_mask
+
+    def colored_image(self) -> np.ndarray:
+        hdf = SD(self.file_path)
+        rsb = hdf.select("EV_1KM_RefSB")
+        r = rsb[BANDS.index("13lo")][:]
+        g = rsb[BANDS.index("12")][:]
+        b = rsb[BANDS.index("9")][:]
+        r = (r // 128).astype(np.uint8)
+        g = (g // 128).astype(np.uint8)
+        b = (b // 128).astype(np.uint8)
+        channels = [r, g, b]
+        img = np.array(channels).transpose(1, 2, 0)
+        return img
 
 
 def extract_date_str(meta):

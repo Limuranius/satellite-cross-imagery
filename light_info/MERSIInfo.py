@@ -11,17 +11,19 @@ import requests
 from PIL import Image
 from tqdm import tqdm
 
+import web.NSMC_parser
+from custom_types import LonLat
 from .Info import Info
 
 
 @dataclass
 class MERSIInfo(Info):
     @staticmethod
-    def find_containing_point(
+    def find(
             start: datetime.date,
             end: datetime.date,
-            lon: float,
-            lat: float) -> list[MERSIInfo]:
+            point: LonLat = None
+    ) -> list[Info]:
         from . import MERSI_database
         start = datetime.datetime.combine(start, datetime.datetime.min.time())
         end = datetime.datetime.combine(end, datetime.datetime.min.time())
@@ -45,69 +47,38 @@ class MERSIInfo(Info):
         requested_infos = MERSIInfo.request_dts(dts_need_requesting)
         valid_infos = []
         for info in requested_infos:
-            if info is None:
-                MERSI_database.add_invalid(dt)
+            if isinstance(info, datetime.datetime):
+                MERSI_database.add_invalid(info)
             else:
                 valid_infos.append(info)
                 result.append(info)
         MERSI_database.add_batch(valid_infos)
 
         # Got infos within given time interval. Now filtering ones that contain point inside them
-        result = [info for info in result if info.contains_pos(lon, lat)]
+        if point:
+            lon, lat = point
+            result = [info for info in result if info.contains_pos(lon, lat)]
 
         return result
 
     @staticmethod
-    def __parse_response_text(text: str, dt: datetime.datetime) -> MERSIInfo | None:
-        text = text.replace("\\r\\n    \\", "")
-        text = text[13:-7]
-        text = text.replace("\\r\\n", "")
-        text = text.replace("\\", "")
-        text = json.loads(text)
-        if int(text["datasize"]) == 0:
-            return None
-        return MERSIInfo(
-            p1=(float(text["longitudewn"]), float(text["latitudewn"])),
-            p2=(float(text["longitudeen"]), float(text["latitudeen"])),
-            p3=(float(text["longitudees"]), float(text["latitudees"])),
-            p4=(float(text["longitudews"]), float(text["latitudews"])),
-            dt=dt,
-            satellite="FY-3D",
-            filename=text["archivename"],
-        )
-
-    @staticmethod
-    def request_dts(dts: list[datetime.datetime]) -> list[MERSIInfo | None]:
-        rs = []
-        for dt in dts:
-            str_data = dt.strftime(
-                "{i:'-1',iteminfo:'^-1!FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF!FY3D!L1!img!1!s9000.dmz.nsmc.org.cn!IMG_LIB/FY3D/FY3D_MERSI_GBAL_L1_YYYYMMDD_HHmm_1000M_MS.HDF/%Y%m%d/FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF.jpg'}")
-            rs.append(grequests.post(
-                url="https://satellite.nsmc.org.cn/PortalSite/WebServ/ProductService.asmx/ShowInfo",
-                data=str_data,
-                headers={
-                    "Content-Type": "application/json;charset=utf-8",
-                },
-                timeout=5,
-            ))
-        responses = []
-        timeout_count = 0
-        for i, resp in tqdm(
-                grequests.imap_enumerated(rs, size=500),
-                total=len(rs),
-                desc="Requesting imagery info from NSMC website"
-        ):
-            if resp is None:  # Timeout
-                timeout_count += 1
+    def request_dts(dts: list[datetime.datetime]) -> list[MERSIInfo | datetime.datetime]:
+        responses = web.NSMC_parser.request_dts_infos(dts)
+        result = []
+        for dt, data in responses:
+            if int(data["datasize"]) == 0:
+                result.append(dt)
                 continue
-            info = MERSIInfo.__parse_response_text(resp.text, dts[i])
-            responses.append(info)
-        print("Timeouts:", timeout_count)
-        return responses
+            result.append(MERSIInfo(
+                p1=(float(data["longitudewn"]), float(data["latitudewn"])),
+                p2=(float(data["longitudeen"]), float(data["latitudeen"])),
+                p3=(float(data["longitudees"]), float(data["latitudees"])),
+                p4=(float(data["longitudews"]), float(data["latitudews"])),
+                dt=dt,
+                satellite="FY-3D",
+                filename=data["archivename"],
+            ))
+        return result
 
     def get_preview(self) -> np.ndarray:
-        url_fmt = "https://img.nsmc.org.cn/IMG_LIB/FY3D/FY3D_MERSI_GBAL_L1_YYYYMMDD_HHmm_1000M_MS.HDF/%Y%m%d/FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF.jpg"
-        image_url = self.dt.strftime(url_fmt)
-        img_resp = requests.get(image_url)
-        img = Image.open(BytesIO(img_resp.content))
-        return np.array(img)
+        return web.NSMC_parser.get_preview(self.dt)

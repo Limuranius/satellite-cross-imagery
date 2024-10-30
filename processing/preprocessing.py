@@ -22,7 +22,7 @@ def get_mersi_file_dt(file_path: str) -> datetime:
     )
 
 
-def group_by_time(max_timedelta: timedelta):
+def group_by_time(max_timedelta: timedelta) -> list[tuple[tuple[str, str], tuple[str, str, str]]]:
     mersi_groups = defaultdict(list)
     for d in [
         paths.MERSI_L1_DIR,
@@ -65,3 +65,73 @@ def group_by_time(max_timedelta: timedelta):
                 l2.pop(0)
     result = [pair for pair in result if len(pair[0]) == 2 and len(pair[1]) == 3]
     return result
+
+
+def group_mersi_files() -> list[tuple[str, str]]:
+    mersi_groups = defaultdict(list)
+    for d in [
+        paths.MERSI_L1_DIR,
+        paths.MERSI_L1_GEO_DIR,
+    ]:
+        files = [os.path.join(d, f) for f in os.listdir(d)]
+        for file_path in files:
+            dt = get_mersi_file_dt(file_path)
+            mersi_groups[dt].append(file_path)
+    mersi_groups = list(mersi_groups.values())
+    mersi_groups.sort(key=lambda x: get_mersi_file_dt(x[0]))
+    return [file_paths for file_paths in mersi_groups if len(file_paths) == 2]
+
+
+def group_modis_files() -> list[tuple[str, str]]:
+    modis_groups = defaultdict(list)
+    for d in [
+        paths.MODIS_L1B_DIR,
+        paths.MODIS_L1B_GEO_DIR,
+        paths.MODIS_CLOUD_MASK_DIR,
+    ]:
+        files = [os.path.join(d, f) for f in os.listdir(d)]
+        for file_path in files:
+            dt = get_modis_file_dt(file_path)
+            modis_groups[dt].append(file_path)
+    modis_groups = list(modis_groups.values())
+    modis_groups.sort(key=lambda x: get_modis_file_dt(x[0]))
+    return [file_paths for file_paths in modis_groups if len(file_paths) == 3]
+
+
+def manual_group(mersi_dts: list[datetime], modis_dts: list[datetime]):
+    groups = []
+    for mersi_dt, modis_dt in zip(mersi_dts, modis_dts):
+        print(mersi_dt, modis_dt)
+        group = [[], []]
+        for d in [
+            paths.MERSI_L1_DIR,
+            paths.MERSI_L1_GEO_DIR,
+        ]:
+            files = [os.path.join(d, f) for f in os.listdir(d)]
+            for file_path in files:
+                dt = get_mersi_file_dt(file_path)
+                if dt == mersi_dt:
+                    group[0].append(file_path)
+
+        for d in [
+            paths.MODIS_L1B_DIR,
+            paths.MODIS_L1B_GEO_DIR,
+            paths.MODIS_CLOUD_MASK_DIR,
+        ]:
+            files = [os.path.join(d, f) for f in os.listdir(d)]
+            for file_path in files:
+                dt = get_modis_file_dt(file_path)
+                if dt == modis_dt:
+                    group[1].append(file_path)
+        assert len(group[0]) == 2 and len(group[1]) == 3
+        groups.append(group)
+    return groups
+
+
+def filter_by_datetime(groups, start: datetime, end: datetime):
+    new_groups = []
+    for group in groups:
+        group_dt = get_mersi_file_dt(group[0][0])
+        if start <= group_dt <= end:
+            new_groups.append(group)
+    return new_groups

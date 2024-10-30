@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 from light_info.MERSIInfo import MERSIInfo
 from light_info.MODISInfo import MODISInfo
 
-start = datetime.date(2024, 8, 31)
-end = datetime.date(2024, 9, 27)
-lon = 140
-lat = 35.5
+start = datetime.date(2023, 10, 1)
+end = datetime.date(2024, 4, 1)
+lon = -43
+lat = 67
 
 list_modis = MODISInfo.find_containing_point(start, end, lon, lat)
 list_mersi = MERSIInfo.find_containing_point(start, end, lon, lat)

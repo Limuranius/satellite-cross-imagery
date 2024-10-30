@@ -2,6 +2,7 @@ from datetime import datetime
 from math import pi
 
 import h5py
+import matplotlib.pyplot as plt
 import numpy as np
 
 from .SatelliteImage import SatelliteImage
@@ -50,6 +51,7 @@ E0 = {
 class MERSIImage(SatelliteImage):
     blackbody: np.ndarray
     space_view: np.ndarray
+    voc: np.ndarray
 
     def __init__(self, file_path: str, geo_path: str, band: str):
         self.band = band
@@ -82,9 +84,22 @@ class MERSIImage(SatelliteImage):
             Cal_0, Cal_1, Cal_2 = vis_cal[band_index]
             Slope = 1
             Intercept = 0
-            dn = (self.counts - blackbody_column) * Slope + Intercept
+            dn = self.counts * Slope + Intercept
             Ref = Cal_2 * dn ** 2 + Cal_1 * dn + Cal_0
 
             self.radiance = Ref / 100 * E0[band] / pi
             self.reflectance = Ref / 100 * hdf.attrs["EarthSun Distance Ratio"] / np.cos(np.radians(self.solar_zenith / 100))
 
+
+    def colored_image(self) -> np.ndarray:
+        with h5py.File(self.file_path) as hdf:
+            rsb = hdf["Data"]["EV_1KM_RefSB"]
+            r = rsb[BANDS.index("12")][:]
+            g = rsb[BANDS.index("11")][:]
+            b = rsb[BANDS.index("9")][:]
+            r = (r // 16).astype(np.uint8)
+            g = (g // 16).astype(np.uint8)
+            b = (b // 16).astype(np.uint8)
+            channels = [r, g, b]
+            img = np.array(channels).transpose(1, 2, 0)
+            return img

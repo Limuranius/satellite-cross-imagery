@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import datetime
 import datetime as dt
 import itertools
 from dataclasses import dataclass, field
 
 import requests
 
+from custom_types import LonLat
 from .Info import Info
 
 
@@ -15,19 +17,24 @@ class MODISInfo(Info):
 
     geo_filename: str
     geo_file_url: str
-
     cloud_mask_filename: str
     cloud_mask_file_url: str
 
     @staticmethod
-    def find_containing_point(
-            start: dt.date,
-            end: dt.date,
-            lon: float,
-            lat: float) -> list[MODISInfo]:
-        img_infos = find_inside_area(start, end, lon, lat, lon + 0.1, lat + 0.1)
-        img_infos = [info for info in img_infos if info.contains_pos(lon, lat)]
-        return img_infos
+    def find(
+            start: datetime.date,
+            end: datetime.date,
+            point: LonLat = None
+    ) -> list[Info]:
+        from . import MODIS_database
+        return MODIS_database.load_data(start, end, point)
+        # if point:
+        #     lon, lat = point
+        #     img_infos = find_inside_area(start, end, lon, lat, lon + 0.1, lat + 0.1)
+        #     img_infos = [info for info in img_infos if info.contains_pos(lon, lat)]
+        #     return img_infos
+        # else:
+        #     return MODIS_database.load_data(start, end)
 
     def get_file_url(self) -> str:
         return "https://ladsweb.modaps.eosdis.nasa.gov" + self.fileURL

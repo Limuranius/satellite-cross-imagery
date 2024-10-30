@@ -43,23 +43,27 @@ pixels = load_matching_pixels(img_mersi, img_modis,
                               # force_recalculate=True
                               )
 
-plt.plot(img_mersi.blackbody)
-plt.plot(img_mersi.space_view)
-plt.plot(img_mersi.voc)
-plt.legend(["Blackbody", "Space View", "VOC"])
-plt.show()
+# plt.plot(img_mersi.blackbody)
+# plt.plot(img_mersi.space_view)
+# plt.plot(img_mersi.voc)
+# plt.legend(["Blackbody", "Space View", "VOC"])
+# plt.show()
 
-visualize_matching_pixels(
-    img_mersi,
-    img_modis,
-    pixels
-)
+# visualize_matching_pixels(
+#     img_mersi,
+#     img_modis,
+#     pixels
+# )
 
 df = matching.matching_stats(img_mersi, img_modis, pixels)
 
 x = df["mersi_rad"].to_numpy().astype(float)
 # x = df["mersi_counts"].to_numpy().astype(float)
 y = df["modis_rad"].to_numpy().astype(float)
+
+mask = df["modis_counts"] != 65533
+x = x[mask]
+y = y[mask]
 
 # plt.hist(df["modis_rad"], 1000)
 # plt.xlabel("modis_rad")
@@ -73,13 +77,10 @@ y = df["modis_rad"].to_numpy().astype(float)
 # plt.xlabel("rad_diff")
 # plt.show()
 
+print((x / y).mean())
 plt.hist(x / y, 1000)
 plt.xlabel("ratio")
 plt.show()
-
-# mask = (np.abs(x - y) < 90) & (np.abs(x - y) > 40) & (x > 40)
-# x = x[mask]
-# y = y[mask]
 
 lin = linregress(x, y)
 fig = plt.figure()
@@ -113,7 +114,6 @@ plt.show()
 plt.plot(x / y, "o", markersize=1)
 plt.xlabel("pixel index")
 plt.ylabel("ratio")
-print((x / y).mean())
 plt.show()
 
 plt.plot(y, x / y, "o", markersize=1)

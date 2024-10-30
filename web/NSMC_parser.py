@@ -2,10 +2,16 @@ import datetime
 import json
 import os
 from enum import Enum, auto
-from web.utils import download_file
-import paths
+from io import BytesIO
 
+import grequests
+import numpy as np
 import requests
+from PIL import Image
+from tqdm import tqdm
+
+import paths
+from web.utils import download_file
 
 
 class DataType(Enum):
@@ -68,3 +74,62 @@ def download_dt(
         output_path=os.path.join(data_type.output_dir(), filename),
         session=session
     )
+
+
+def get_preview(dt: datetime.datetime) -> np.ndarray:
+    url_fmt = "https://img.nsmc.org.cn/IMG_LIB/FY3D/FY3D_MERSI_GBAL_L1_YYYYMMDD_HHmm_1000M_MS.HDF/%Y%m%d/FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF.jpg"
+    image_url = dt.strftime(url_fmt)
+    img_resp = requests.get(image_url)
+    img = Image.open(BytesIO(img_resp.content))
+    return np.array(img)
+
+
+def request_dts_infos(dts: list[datetime.datetime]) -> list[tuple[datetime.datetime, dict]]:
+    rs = []
+    for dt in dts:
+        str_data = dt.strftime(
+            "{i:'-1',iteminfo:'^-1!FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF!FY3D!L1!img!1!s9000.dmz.nsmc.org.cn!IMG_LIB/FY3D/FY3D_MERSI_GBAL_L1_YYYYMMDD_HHmm_1000M_MS.HDF/%Y%m%d/FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF.jpg'}"
+        )
+        rs.append(grequests.post(
+            url="https://satellite.nsmc.org.cn/PortalSite/WebServ/ProductService.asmx/ShowInfo",
+            data=str_data,
+            headers={
+                "Content-Type": "application/json;charset=utf-8",
+            },
+            timeout=5,
+        ))
+    responses = []
+    timeout_count = 0
+    for i, resp in tqdm(
+            grequests.imap_enumerated(rs, size=500),
+            total=len(rs),
+            desc="Requesting imagery info from NSMC website"
+    ):
+        if resp is None:  # Timeout
+            timeout_count += 1
+            continue
+        responses.append((
+            dts[i],
+            __parse_response_text(resp.text)
+        ))
+    print("Timeouts:", timeout_count)
+    return responses
+
+
+def __parse_response_text(text: str) -> dict:
+    text = text.replace("\\r\\n    \\", "")
+    text = text[13:-7]
+    text = text.replace("\\r\\n", "")
+    text = text.replace("\\", "")
+    return json.loads(text)
+
+
+# dts = [
+#     datetime.datetime(2024, 9, 4, 14, 10),
+#     datetime.datetime(2024, 9, 4, 14, 5),
+#     datetime.datetime(2024, 9, 4, 14, 0),
+# ]
+#
+# for dt in dts:
+#     select_dt(dt, DataType.L1)
+#     select_dt(dt, DataType.L1_GEO)

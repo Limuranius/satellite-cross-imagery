@@ -6,8 +6,8 @@ import requests
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
+from custom_types import LonLat
 from light_info.MODISInfo import MODISInfo
-
 
 CSV_PATH = "/home/gleb123/satellite-cross-imagery/light_info/modis_data.csv"
 
@@ -81,6 +81,7 @@ def to_line(info: MODISInfo):
         info.cloud_mask_file_url,
     ]
 
+
 def parse_line(line) -> MODISInfo:
     return MODISInfo(
         (float(line[0]), float(line[1])),
@@ -122,8 +123,7 @@ def collect_data(
 def load_data(
         start: dt.date,
         end: dt.date,
-        lon: float,
-        lat: float,
+        point: LonLat = None,
 ) -> list[MODISInfo]:
     result = []
     with open(CSV_PATH) as csvfile:
@@ -131,6 +131,10 @@ def load_data(
         data = [*reader]
         for line in data:
             info = parse_line(line)
-            if start <= info.dt <= end and info.contains_pos(lon, lat):
+            is_good = start <= info.dt <= end
+            if point:
+                lon, lat = point
+                is_good = is_good and info.contains_pos(lon, lat)
+            if is_good:
                 result.append(info)
     return result
