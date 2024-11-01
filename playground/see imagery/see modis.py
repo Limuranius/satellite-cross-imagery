@@ -10,12 +10,12 @@ from processing.load_imagery import iterate_close_images
 def see_modis():
     fig, ax = plt.subplots(nrows=4, ncols=4)
 
-    for k, band in enumerate(MODISImage.BANDS):
+    for k, band in enumerate(MODISImage.MODIS_BANDS):
         i = k // 4
         j = k % 4
 
         img_modis = MODISImage.MODISImage(
-            "/home/gleb123/satellite-cross-imagery/imagery/MODIS/L1B/MYD021KM.A2024248.1425.061.2024249173029.hdf",
+            "/imagery/MODIS/L1B/MYD021KM.A2024248.1425.061.2024249173029.hdf",
             "/home/gleb123/satellite-cross-imagery/imagery/MODIS/L1B GEO/MYD03.A2024248.1425.061.2024249171339.hdf",
             band,
         )
@@ -29,12 +29,12 @@ def see_modis():
 def see_mersi():
     fig, ax = plt.subplots(nrows=4, ncols=4)
 
-    for k, band in enumerate(MERSIImage.BANDS):
+    for k, band in enumerate(MERSIImage.MERSI_2_BANDS):
         i = k // 4
         j = k % 4
 
         img_mersi = MERSIImage.MERSIImage(
-            "/home/gleb123/satellite-cross-imagery/imagery/MERSI-2/L1/FY3D_MERSI_GBAL_L1_20240904_1420_1000M_MS.HDF",
+            "/imagery/MERSI-2/L1/FY3D_MERSI_GBAL_L1_20240904_1420_1000M_MS.HDF",
             "/home/gleb123/satellite-cross-imagery/imagery/MERSI-2/L1 GEO/FY3D_MERSI_GBAL_L1_20240904_1420_GEO1K_MS.HDF",
             band,
         )

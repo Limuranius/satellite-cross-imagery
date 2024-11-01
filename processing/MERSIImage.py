@@ -7,7 +7,7 @@ import numpy as np
 
 from .SatelliteImage import SatelliteImage
 
-BANDS = ["5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"]
+MERSI_2_BANDS = ["5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"]
 BANDS_WAVELEN = {
     "5": 1380,
     "6": 1640,
@@ -54,6 +54,7 @@ class MERSIImage(SatelliteImage):
     voc: np.ndarray
 
     def __init__(self, file_path: str, geo_path: str, band: str):
+        self.satellite_name = "FY-3D"
         self.band = band
         self.wavelength = BANDS_WAVELEN[band]
         self.file_path = file_path
@@ -69,7 +70,7 @@ class MERSIImage(SatelliteImage):
             time = datetime.strptime(time_str, "%H:%M:%S").time()
             self.dt = datetime.combine(date, time)
 
-            band_index = BANDS.index(band)
+            band_index = MERSI_2_BANDS.index(band)
             self.counts = hdf["Data"]["EV_1KM_RefSB"][band_index][:]
 
             # Fix broken pixels
@@ -79,11 +80,14 @@ class MERSIImage(SatelliteImage):
             self.blackbody = hdf["Calibration"]["BB_DN_average"][band_index + 5]
             self.space_view = hdf["Calibration"]["SV_DN_average"][band_index + 5]
             self.voc = hdf["Calibration"]["VOC_DN_average"][band_index + 5]
-            blackbody_column = np.repeat(self.blackbody, 10).reshape((-1, 1))
+
+            bb_column = np.repeat(self.blackbody, 10).reshape((-1, 1))
+            sv_column = np.repeat(self.space_view, 10).reshape((-1, 1))
 
             Cal_0, Cal_1, Cal_2 = vis_cal[band_index]
             Slope = 1
             Intercept = 0
+            # dn = (self.counts - sv_column) * Slope + Intercept
             dn = self.counts * Slope + Intercept
             Ref = Cal_2 * dn ** 2 + Cal_1 * dn + Cal_0
 
@@ -94,9 +98,9 @@ class MERSIImage(SatelliteImage):
     def colored_image(self) -> np.ndarray:
         with h5py.File(self.file_path) as hdf:
             rsb = hdf["Data"]["EV_1KM_RefSB"]
-            r = rsb[BANDS.index("12")][:]
-            g = rsb[BANDS.index("11")][:]
-            b = rsb[BANDS.index("9")][:]
+            r = rsb[MERSI_2_BANDS.index("12")][:]
+            g = rsb[MERSI_2_BANDS.index("11")][:]
+            b = rsb[MERSI_2_BANDS.index("9")][:]
             r = (r // 16).astype(np.uint8)
             g = (g // 16).astype(np.uint8)
             b = (b // 16).astype(np.uint8)

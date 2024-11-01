@@ -1,15 +1,19 @@
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 
+import h5py
+import matplotlib
 import numpy as np
 import pandas as pd
 import tqdm
 from matplotlib import pyplot as plt
 import seaborn as sns
+from pyhdf.SD import SD
+from scipy.stats import linregress
 
 from processing import matching
-from processing.MERSIImage import MERSIImage
-from processing.MODISImage import MODISImage
+from processing.MERSIImage import MERSIImage, MERSI_2_BANDS
+from processing.MODISImage import MODISImage, MODIS_BANDS
 from processing.load_imagery import iterate_close_images, iterate_mersi, iterate_modis, iterate_image_groups
 from processing.matching import visualize_matching_pixels, load_matching_pixels
 from processing.preprocessing import manual_group
@@ -17,6 +21,21 @@ from utils import datetime_range
 
 from visuals.graphs import relplot_with_linregress
 import visuals.map_2d
+
+matplotlib.rcParams['figure.figsize'] = (20, 10)
+
+MATCHING_PIXELS_KWARGS = dict(
+    max_zenith_relative_diff=0.05,
+    max_zenith=3000,
+    exclude_clouds=False,
+    exclude_land=False,
+    exclude_water=False,
+    do_erosion=False,
+    correct_cloud_movement=False,
+    use_rstd_filtering=True,
+    rstd_kernel_size=5,
+    rstd_threshold=0.05,
+)
 
 pairs = [
     ("8", "8"),
@@ -26,20 +45,19 @@ pairs = [
     # ("12", "13lo"),
     # ("12", "14lo"),
 ]
-interval = (
-    datetime(2024, 9, 4, 14, 20),
-    datetime(2024, 9, 5)
-)
+
+OVERLAPPING_SWATH_START = datetime(2024, 9, 4, 14, 20)
+OVERLAPPING_SWATH_END = datetime(2024, 9, 4, 14, 55)
 
 generate_iterator = lambda mersi_band, modis_band: iterate_image_groups(
     groups=manual_group(
         mersi_dts=list(datetime_range(
-            datetime(2024, 9, 4, 14, 20),
-            datetime(2024, 9, 4, 14, 55),
+            OVERLAPPING_SWATH_START,
+            OVERLAPPING_SWATH_END,
         )),
         modis_dts=list(datetime_range(
-            datetime(2024, 9, 4, 14, 20),
-            datetime(2024, 9, 4, 14, 55),
+            OVERLAPPING_SWATH_START,
+            OVERLAPPING_SWATH_END,
         )),
     ),
     mersi_band=mersi_band,
@@ -49,34 +67,29 @@ generate_iterator = lambda mersi_band, modis_band: iterate_image_groups(
 
 def iterate_images(func, mersi_band="8", modis_band="8", force_recalculate=False):
     for i, (img_mersi, img_modis) in enumerate(generate_iterator(mersi_band, modis_band)):
-        print(img_mersi.dt)
-        print(img_modis.dt)
         pixels = load_matching_pixels(
             img_mersi, img_modis,
-            force_recalculate=force_recalculate
+            **MATCHING_PIXELS_KWARGS,
         )
         func(img_mersi, img_modis, pixels)
         print(i)
 
 
 def look_at_matching_pixels():
-    MERSI_BAND = "10"
-    MODIS_BAND = "10"
+    MERSI_BAND = "8"
+    MODIS_BAND = "8"
     for i, (img_mersi, img_modis) in enumerate(generate_iterator(MERSI_BAND, MODIS_BAND)):
-        # if i != 7:
-        #     print(i)
-        #     continue
         pixels = load_matching_pixels(
-            img_mersi, img_modis,
+            img_mersi, img_modis, **MATCHING_PIXELS_KWARGS,
         )
         visualize_matching_pixels(
             img_mersi,
             img_modis,
             pixels
         )
-        # plt.show()
-        plt.savefig(f"stability test/images/{i}.png")
-        plt.close()
+        plt.show()
+        # plt.savefig(f"stability test/images/{i}.png")
+        # plt.close()
         print(i)
 
 
@@ -101,7 +114,8 @@ def recalculate_matching_pixels():
     for img_mersi, img_modis in tqdm.tqdm(generate_iterator("8", "8"), desc="Recalculating matching pixels"):
         pixels = load_matching_pixels(
             img_mersi, img_modis,
-            force_recalculate=True
+            # force_recalculate=True
+            **MATCHING_PIXELS_KWARGS,
         )
 
         # visualize_matching_pixels(img_mersi, img_modis, pixels)
@@ -113,9 +127,12 @@ def save_stats():
         print(MERSI_BAND, MODIS_BAND)
         dfs = []
         for i, (img_mersi, img_modis) in enumerate(generate_iterator(MERSI_BAND, MODIS_BAND)):
-            pixels = load_matching_pixels(img_mersi, img_modis)
+            pixels = load_matching_pixels(img_mersi, img_modis, **MATCHING_PIXELS_KWARGS)
 
-            df = matching.matching_stats(img_mersi, img_modis, pixels)
+            apply_amplifier_correction(i, img_mersi)
+
+            # df = matching.matching_stats(img_mersi, img_modis, pixels)
+            df = matching.aggregated_matching_stats(img_mersi, img_modis, pixels)
             df["image_number"] = i
             dfs.append(df)
 
@@ -124,77 +141,6 @@ def save_stats():
         total_df = pd.concat(dfs)
         file_path = f"stability test/{MERSI_BAND} {MODIS_BAND}.pkl"
         total_df.to_pickle(file_path)
-
-
-def process_stats():
-    # writer = pd.ExcelWriter("stability test/results.xlsx")
-    for MERSI_BAND, MODIS_BAND in pairs:
-        file_path = f"stability test/{MERSI_BAND} {MODIS_BAND}.pkl"
-        df = pd.read_pickle(file_path)
-
-        # sns.histplot(
-        #     data=df,
-        #     x=df["mersi_rad"] / df["modis_rad"],
-        #     hue="image_number",
-        #     palette="tab10",
-        #     stat="proportion",
-        #     common_norm=False,
-        # )
-        # plt.title(f"MERSI-2 band {MERSI_BAND}, MODIS band {MODIS_BAND}")
-        # plt.xlabel("MERSI-2 radiance / MODIS radiance")
-        # plt.show()
-
-        sns.relplot(
-            df,
-            x="mersi_rad",
-            y="modis_rad",
-            hue="image_number",
-            palette="tab10",
-            s=2,
-            edgecolor=None,
-        )
-        plt.show()
-
-        # sns.histplot(
-        #     data=df,
-        #     x="mersi_rad",
-        #     hue="image_number",
-        #     palette="tab10",
-        #     stat="proportion",
-        #     common_norm=False,
-        # )
-        # plt.title(f"MERSI-2 band {MERSI_BAND} radiance")
-        # plt.xlabel("MERSI-2 radiance")
-        # plt.savefig(f"stability test/{MERSI_BAND}.png", dpi=300)
-        # plt.close()
-
-        # Номер снимка, mean, std, кол-во пикселей
-        # sheet_data = [["Номер снимка", "mean", "std", "кол-во пикселей"]]
-        # # img_datas = []
-        # for img_i in range(8):
-        #     img_data = df[df["image_number"] == img_i]
-        #     rel = img_data["mersi_rad"] / img_data["modis_rad"]
-        #     # img_datas.append(rel)
-        #     sheet_data.append([
-        #         img_i,
-        #         rel.mean(),
-        #         rel.std(),
-        #         len(rel)
-        #     ])
-
-        # ttests = [[None for _ in range(8)] for _ in range(8)]
-        # for img_i in range(8):
-        #     for img_j in range(8):
-        #         ttests[img_i][img_j] = ttest_ind(
-        #             img_datas[img_i],
-        #             img_datas[img_j],
-        #             equal_var=False
-        #         ).pvalue
-        # sheet_data += ttests
-
-        # pd.DataFrame(sheet_data).to_excel(writer, sheet_name=f"{MERSI_BAND} {MODIS_BAND}", index=False, header=False)
-
-    # writer.close()
 
 
 def show_relation_image(
@@ -236,12 +182,15 @@ def pixels_relation_relplot():
             j = img_i % 4
             ax = axes[i][j]
             data = df[df["image_number"] == img_i]
-            data = data.sample(n=min(10000, len(data)))
+            data = data.sample(n=min(15000, len(data)))
             relplot_with_linregress(
                 data["mersi_rad"],
                 data["modis_rad"],
                 ax,
             )
+            ax.set_xlabel("MERSI-2 radiance")
+            ax.set_ylabel("MODIS radiance")
+            ax.set_title(str(img_i))
 
         # plt.savefig(f"stability test/graphs/{MERSI_BAND} {MODIS_BAND}.png")
         # plt.close()
@@ -268,8 +217,8 @@ def multiple_calibration(mersi_band):
     for i, img_mersi in enumerate(iterate_mersi(
             band=mersi_band,
             interval=(
-                    datetime(2024, 9, 4, 14, 20),
-                    datetime(2024, 9, 4, 14, 40),
+                    OVERLAPPING_SWATH_START - timedelta(minutes=20),
+                    OVERLAPPING_SWATH_END,
             )
     )):
         bb.append(img_mersi.blackbody)
@@ -277,11 +226,39 @@ def multiple_calibration(mersi_band):
         voc.append(img_mersi.voc)
         print(i)
 
-    plt.plot(np.concatenate(bb))
-    plt.plot(np.concatenate(sv))
-    plt.plot(np.concatenate(voc))
-    plt.legend(["Blackbody", "Space View", "VOC"])
-    # plt.show()
+    bb = np.concatenate(bb)
+    sv = np.concatenate(sv)
+    voc = np.concatenate(voc)
+
+    bb[1199] = bb[1198]
+    sv[1199] = sv[1198]
+    voc[1199] = voc[1198]
+
+    # Убираем изменчивость усилителя
+    level0 = bb[0]
+    # bb_amplifier = bb / level0
+    # voc_amplifier = voc / level0
+    diff = voc[1500] - bb[1500]
+    amplifier = bb / level0
+
+    fig, ax = plt.subplots(ncols=2)
+    ax[0].plot(bb)
+    ax[0].plot(sv)
+    ax[0].plot(voc)
+    ax[0].vlines(range(0, len(bb), 200), ymin=min(bb), ymax=max(sv))
+    ax[0].legend(["Blackbody", "Space View", "VOC"])
+    ax[0].set_title(f"MERSI-2, Band {mersi_band}, start={OVERLAPPING_SWATH_START}, end={OVERLAPPING_SWATH_END}")
+    ax[0].set_ylabel("DN")
+
+    # l = linregress(voc[800:], bb[800:])
+    # ax[1].plot(bb)
+    # ax[1].plot(voc * l.slope + l.intercept)
+
+    # ax[1].plot(amplifier)
+
+    # np.save("amplifier", amplifier[800:])
+
+    # relplot_with_linregress(voc[800:], bb[800:], ax[1])
 
 
 def show_pixel_outliers(
@@ -292,13 +269,14 @@ def show_pixel_outliers(
     stats = matching.matching_stats(img_mersi, img_modis, pixels)
     colored_img = img_mersi.colored_image()
     output = np.zeros_like(colored_img)
-    center = 1.9
-    eps = 0.3
+    center = 0.49
+    eps = 0.4
     for (mersi_pixel, modis_pixel), (_, stats_row) in zip(pixels, stats.iterrows()):
-        if abs(stats_row["rad_relation"] - center) > eps:
-            output[*mersi_pixel] = [255, 0, 0]
-        else:
-            output[*mersi_pixel] = colored_img[*mersi_pixel]
+        output[*mersi_pixel] = colored_img[*mersi_pixel]
+        # if abs(1 / stats_row["rad_relation"] - center) > eps:
+        #     output[*mersi_pixel] = [255, 0, 0]
+        # else:
+        #     output[*mersi_pixel] = colored_img[*mersi_pixel]
 
     _, ax = plt.subplots(ncols=3)
     ax[0].imshow(colored_img)
@@ -310,23 +288,104 @@ def show_pixel_outliers(
     plt.show()
 
 
+def apply_amplifier_correction(
+        img_i: int,
+        img_mersi: MERSIImage,
+):
+    amplifier_coeffs = np.load("amplifier.npy")
+    for i in range(200):
+        img_mersi.radiance[10 * i: 10 * (i + 1)] *= amplifier_coeffs[img_i * 200 + i]
+
+
+def are_coefficients_same():
+    mersi_band = "8"
+    modis_band = "8"
+    df = pd.DataFrame(columns=["MERSI Coeff0", "MERSI Coeff1", "MERSI Coeff2", "MODIS Slope", "MODIS Intercept"])
+    for i, (img_mersi, img_modis) in enumerate(generate_iterator(mersi_band, modis_band)):
+        Cal_0, Cal_1, Cal_2 = h5py.File(img_mersi.file_path)["Calibration"]["VIS_Cal_Coeff"][MERSI_2_BANDS.index(mersi_band)]
+        RefSB = SD(img_modis.file_path).select("EV_1KM_RefSB")
+        radiance_scale = RefSB.attributes()["radiance_scales"][MODIS_BANDS.index(modis_band)]
+        radiance_offset = RefSB.attributes()["radiance_offsets"][MODIS_BANDS.index(modis_band)]
+        df.loc[len(df)] = [Cal_0, Cal_1, Cal_2, radiance_scale, radiance_offset]
+    print(df)
+
+
+def bbsvvoc_radiance_correlation():
+    bb = []
+    sv = []
+    voc = []
+
+    for i, img_mersi in enumerate(iterate_mersi(
+            band="8",
+            interval=(
+                    OVERLAPPING_SWATH_START - timedelta(minutes=0),
+                    OVERLAPPING_SWATH_END,
+            )
+    )):
+        bb.append(img_mersi.blackbody)
+        sv.append(img_mersi.space_view)
+        voc.append(img_mersi.voc)
+        print(i)
+
+    bb = np.concatenate(bb)
+    sv = np.concatenate(sv)
+    voc = np.concatenate(voc)
+
+    bb[399] = bb[398]
+    sv[399] = sv[398]
+    voc[399] = voc[398]
+
+    fig, ax = plt.subplots(ncols=2)
+    ax[0].plot(bb)
+    ax[0].plot(sv)
+    ax[0].plot(voc)
+    ax[0].vlines(range(0, len(bb), 200), ymin=min(bb), ymax=max(sv))
+    ax[0].legend(["Blackbody", "Space View", "VOC"])
+    ax[0].set_title(f"MERSI-2, Band 8, start={OVERLAPPING_SWATH_START}, end={OVERLAPPING_SWATH_END}")
+    ax[0].set_ylabel("DN")
+
+
+    file_path = f"stability test/8 8.pkl"
+    df = pd.read_pickle(file_path)
+
+    slopes = []
+    for img_i in range(8):
+        data = df[df["image_number"] == img_i]
+        l = linregress(data["mersi_rad"], data["modis_rad"])
+        print(l.slope, l.intercept, l.rvalue ** 2)
+        if l.rvalue ** 2 < 0.95:
+            slopes.append(None)
+        else:
+            slopes.append(l.slope)
+
+    ax[1].plot(slopes)
+    ax[1].set_ylabel("Slope")
+    ax[1].set_xlabel("img_i")
+
+    amplifier = sv / sv[0]
+    np.save("amplifier", amplifier)
+
+    plt.show()
+
+
+
 
 # recalculate_matching_pixels()
-# save_stats()
+save_stats()
 # look_at_matching_pixels()
 
 pixels_relation_relplot()
-# process_stats()
 # iterate_images(georeference_stability)
 # iterate_images(show_relation_image)
 # iterate_images(calibration, mersi_band="10")
 
-# multiple_calibration("18")
+# for mersi_band in BANDS:
+#     multiple_calibration(mersi_band)
+#     plt.savefig(f"calibrators/{mersi_band} calibrators.png")
+#     plt.close()
+
+# bbsvvoc_radiance_correlation()
+# multiple_calibration("8")
 # plt.show()
-# plt.savefig("18 calib.png")
-# plt.close()
-# multiple_calibration("10")
-# plt.show()
-# plt.savefig("10 calib.png")
 
 # iterate_images(show_pixel_outliers)

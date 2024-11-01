@@ -5,7 +5,7 @@ from pyhdf.SD import SD
 
 from .SatelliteImage import SatelliteImage
 
-BANDS = ["8", "9", "10", "11", "12", "13lo", "13hi", "14lo", "14hi", "15", "16", "17", "18", "19", "26"]
+MODIS_BANDS = ["8", "9", "10", "11", "12", "13lo", "13hi", "14lo", "14hi", "15", "16", "17", "18", "19", "26"]
 BANDS_WAVELEN = {
     "8": 412,
     "9": 443,
@@ -37,6 +37,7 @@ class MODISImage(SatelliteImage):
     water_mask: np.ndarray
 
     def __init__(self, file_path: str, geo_path: str, band: str):
+        self.satellite_name = "AQUA"
         self.file_path = file_path
         self.band = band
         self.wavelength = BANDS_WAVELEN[band]
@@ -53,14 +54,14 @@ class MODISImage(SatelliteImage):
         radiance_offsets = RefSB.attributes()["radiance_offsets"]
         reflectance_scales = RefSB.attributes()["reflectance_scales"]
         reflectance_offsets = RefSB.attributes()["reflectance_offsets"]
-        band_index = BANDS.index(band)
+        band_index = MODIS_BANDS.index(band)
         self.scaled_integers = RefSB[:][band_index]
         self.radiance = (RefSB[:][band_index].astype(float) - radiance_offsets[band_index]) * radiance_scales[
             band_index]
         self.reflectance = (RefSB[:][band_index].astype(float) - reflectance_offsets[band_index]) * reflectance_scales[
             band_index]
 
-        water_mask_band = BANDS.index("17")
+        water_mask_band = MODIS_BANDS.index("17")
         water_mask_radiance = (RefSB[:][water_mask_band].astype(float) - radiance_offsets[water_mask_band]) * \
                               radiance_scales[water_mask_band]
         self.water_mask = water_mask_radiance < 20.0
@@ -80,9 +81,9 @@ class MODISImage(SatelliteImage):
     def colored_image(self) -> np.ndarray:
         hdf = SD(self.file_path)
         rsb = hdf.select("EV_1KM_RefSB")
-        r = rsb[BANDS.index("13lo")][:]
-        g = rsb[BANDS.index("12")][:]
-        b = rsb[BANDS.index("9")][:]
+        r = rsb[MODIS_BANDS.index("13lo")][:]
+        g = rsb[MODIS_BANDS.index("12")][:]
+        b = rsb[MODIS_BANDS.index("9")][:]
         r = (r // 128).astype(np.uint8)
         g = (g // 128).astype(np.uint8)
         b = (b // 128).astype(np.uint8)

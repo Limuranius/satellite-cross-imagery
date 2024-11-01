@@ -10,6 +10,7 @@ from scipy.spatial import KDTree
 
 class SatelliteImage(ABC):
     file_path: str
+    satellite_name: str
 
     latitude: np.ndarray
     longitude: np.ndarray
