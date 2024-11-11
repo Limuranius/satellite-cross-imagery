@@ -9,11 +9,21 @@ from .MODISImage import extract_datetime
 
 
 def get_modis_file_dt(file_path: str) -> datetime:
-    hdf = SD(file_path)
-    return extract_datetime(hdf.attributes()["CoreMetadata.0"])
+    """
+    Examples:
+        MYD35_L2.A2019004.2225.061.2019005170130.hdf
+        MYD021KM.A2019004.2235.061.2019005165036.hdf
+        MYD03.A2019004.2255.061.2019005164116.hdf
+    """
+    filename = os.path.basename(file_path)
+    parts = filename.split(".")
+    dt_str = parts[1] + parts[2]
+    fmt = "A%Y%j%H%M"
+    return datetime.strptime(dt_str, fmt)
 
 
 def get_mersi_file_dt(file_path: str) -> datetime:
+    # Example: FY3D_MERSI_GBAL_L1_20240904_1400_1000M_MS.HDF
     dt_fmt = "%Y%m%d%H%M"
     filename_parts = file_path.split("_")
     return datetime.strptime(

@@ -12,15 +12,20 @@ def relplot_with_linregress(
     lin = linregress(x, y)
     ax.scatter(x, y, c=z, s=1)
     ax.plot(x, x * lin.slope + lin.intercept, "--")
-    txt = f"""{lin.slope=:.5f}
-    {lin.intercept=:.5f}
-    {lin.rvalue**2=:.5f}
+    txt = f"""slope={lin.slope:.5f}
+intercept={lin.intercept:.5f}
+r^2={lin.rvalue**2:.5f}
     """
     ax.text(
         0,
-        1,
+        0.99,
         txt,
         horizontalalignment='left',
         verticalalignment='top',
         transform=ax.transAxes,
     )
+
+def scatter_with_density(x, y, ax):
+    xy = np.vstack([x, y])
+    z = gaussian_kde(xy)(xy)
+    ax.scatter(x, y, c=z, s=1)

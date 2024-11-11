@@ -79,14 +79,19 @@ class MODISImage(SatelliteImage):
         self.cloud_mask = cloud_mask
 
     def colored_image(self) -> np.ndarray:
+        # r - B01, g - B04, b - B03
         hdf = SD(self.file_path)
-        rsb = hdf.select("EV_1KM_RefSB")
-        r = rsb[MODIS_BANDS.index("13lo")][:]
-        g = rsb[MODIS_BANDS.index("12")][:]
-        b = rsb[MODIS_BANDS.index("9")][:]
-        r = (r // 128).astype(np.uint8)
-        g = (g // 128).astype(np.uint8)
-        b = (b // 128).astype(np.uint8)
+        rsb250 = hdf.select("EV_250_Aggr1km_RefSB")
+        rsb500 = hdf.select("EV_500_Aggr1km_RefSB")
+        # r = (rsb250[0][:] / 32768) * 0.0249
+        # g = (rsb500[1][:] / 32768) * 0.0188
+        # b = (rsb500[0][:] / 32768) * 0.0245
+        r = (rsb250[0][:] / 32768) * 3.5
+        g = (rsb500[1][:] / 32768) * 3.5 / 1.38
+        b = (rsb500[0][:] / 32768) * 3.5
+        # r = (r // 128).astype(np.uint8)
+        # g = (g // 128).astype(np.uint8)
+        # b = (b // 128).astype(np.uint8)
         channels = [r, g, b]
         img = np.array(channels).transpose(1, 2, 0)
         return img

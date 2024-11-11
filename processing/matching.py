@@ -51,12 +51,15 @@ def get_matching_pixels_filename(
         do_erosion: bool,
         correct_cloud_movement: bool,
         use_rstd_filtering: bool,
-        rstd_kernel_size: int = KERNEL_SIZE,
-        rstd_threshold: float = RSTD_THRESHOLD,
+        rstd_kernel_size: int,
+        rstd_threshold: float,
+        exclude_overflow: bool,
 ):
     dt_fmt = "%Y%m%d%H%M"
     filename = (f"mersi={image_mersi.dt.strftime(dt_fmt)} "
                 f"modis={image_modis.dt.strftime(dt_fmt)} "
+                f"band_mersi={image_mersi.band} "
+                f"band_modis={image_modis.band} "
                 f"zen_rel={max_zenith_relative_diff} "
                 f"max_zen={max_zenith} "
                 f"no_cloud={int(exclude_clouds)} "
@@ -66,7 +69,8 @@ def get_matching_pixels_filename(
                 f"erosion={int(do_erosion)} "
                 f"rstd_filt={int(use_rstd_filtering)} "
                 f"rstd_kern={rstd_kernel_size} "
-                f"rstd_thresh={rstd_threshold}"
+                f"rstd_thresh={rstd_threshold} "
+                f"no_overflow={exclude_overflow}"
                 ".pkl")
     file_path = os.path.join(paths.MATCHING_PIXELS_DIR, filename)
     return file_path
@@ -84,8 +88,9 @@ def filter_matching_pixels(
         do_erosion: bool,
         correct_cloud_movement: bool,
         use_rstd_filtering: bool,
-        rstd_kernel_size: int = KERNEL_SIZE,
-        rstd_threshold: float = RSTD_THRESHOLD,
+        rstd_kernel_size: int,
+        rstd_threshold: float,
+        exclude_overflow: bool,
 ) -> list[tuple[int, int], tuple[int, int]]:
     mersi_pixels = np.array([pixel[0] for pixel in pixels]).transpose(1, 0)
     modis_pixels = np.array([pixel[1] for pixel in pixels]).transpose(1, 0)
@@ -93,7 +98,8 @@ def filter_matching_pixels(
     zenith_mersi = image_mersi.sensor_zenith[*mersi_pixels]
     zenith_modis = image_modis.sensor_zenith[*modis_pixels]
     # zenith_diff_good = np.abs(zenith_modis - zenith_mersi) < max_zenith_diff
-    zenith_diff_good = np.abs(np.cos(np.radians(zenith_modis / 100)) / np.cos(np.radians(zenith_mersi / 100)) - 1) < max_zenith_relative_diff
+    zenith_diff_good = np.abs(
+        np.cos(np.radians(zenith_modis / 100)) / np.cos(np.radians(zenith_mersi / 100)) - 1) < max_zenith_relative_diff
     zenith_not_big = zenith_mersi < max_zenith
 
     mask = zenith_diff_good & zenith_not_big
@@ -127,6 +133,11 @@ def filter_matching_pixels(
         mersi_std_map = load_rstd_map(image_mersi, rstd_kernel_size)
         for i, ((mersi_i, mersi_j), (modis_i, modis_j)) in enumerate(pixels):
             mask[i] = mask[i] and mersi_std_map[mersi_i, mersi_j] < rstd_threshold
+    if exclude_overflow:
+        for i, (mersi_coord, modis_coord) in enumerate(pixels):
+            mersi_overflow = image_mersi.counts[*mersi_coord] > 4050
+            modis_overflow = image_modis.scaled_integers[*modis_coord] > 60000
+            mask[i] = mask[i] and not mersi_overflow and not modis_overflow
 
     pixels = [pixels[i] for i in range(len(pixels)) if mask[i]]
 
@@ -163,9 +174,11 @@ def visualize_matching_pixels(
 
     ax[0][1].imshow(im2)
     ax[0][1].set_title("MERSI-2 matching pixels")
+    ax[0][1].sharex(ax[0][0])
+    ax[0][1].sharey(ax[0][0])
 
     ax[0][2].hist(mersi_radiances, bins=100)
-    ax[0][2].set_title("MERSI-2 radiance histogram")
+    ax[0][2].set_title("MERSI-2 matching pixels radiance histogram")
     ax[0][2].set_xlabel("radiance")
 
     ax[1][0].imshow(im3)
@@ -173,11 +186,13 @@ def visualize_matching_pixels(
 
     ax[1][1].imshow(im4)
     ax[1][1].set_title("MODIS AQUA matching pixels")
+    ax[1][0].sharex(ax[1][1])
+    ax[1][0].sharey(ax[1][1])
 
     ax[1][2].sharex(ax[0][2])
     ax[1][2].sharey(ax[0][2])
     ax[1][2].hist(modis_radiances, bins=100)
-    ax[1][2].set_title("MODIS radiance histogram")
+    ax[1][2].set_title("MODIS matching pixels radiance histogram")
     ax[1][2].set_xlabel("radiance")
 
 
@@ -185,7 +200,6 @@ def matching_stats(
         image_mersi: MERSIImage,
         image_modis: MODISImage,
         pixels: list[tuple[int, int], tuple[int, int]],
-        filter_modis_overflow=True,
 ) -> pd.DataFrame:
     mersi_pixels = np.array([pixel[0] for pixel in pixels]).transpose(1, 0)
     modis_pixels = np.array([pixel[1] for pixel in pixels]).transpose(1, 0)
@@ -199,6 +213,7 @@ def matching_stats(
     mersi_solz = image_mersi.solar_zenith[*mersi_pixels]
     modis_solz = image_modis.solar_zenith[*modis_pixels]
     rad_relation = mersi_rad / modis_rad
+    mersi_y = modis_pixels[0]
 
     df = pd.DataFrame({
         "mersi_rad": mersi_rad,
@@ -211,10 +226,8 @@ def matching_stats(
         "mersi_solz": mersi_solz,
         "modis_solz": modis_solz,
         "rad_relation": rad_relation,
+        "mersi_y": mersi_y,
     })
-    if filter_modis_overflow:
-        # df = df[df["modis_counts"] != 65533]
-        df = df[df["modis_counts"] < 60000]
     print("Pixels in statistics:", len(df))
     return df
 
@@ -232,13 +245,14 @@ def aggregated_matching_stats(
         "modis_rad",
         "rad_relation",
         "mersi_count",
-    ])
+    ], index=range(len(pixels)))
+    df_i = 0
 
     mersi_visited_mask = np.zeros(shape=(2000, 2048), dtype=bool)
     indices = np.full(shape=(2000, 2048), fill_value=-1, dtype=int)
     indices[*mersi_pixels] = np.arange(len(pixels))
 
-    for mersi_pixel, modis_pixel in tqdm.tqdm(pixels, desc="Creating statistics"):
+    for mersi_pixel, modis_pixel in tqdm.tqdm(pixels, desc="Aggregating statistics"):
         if not mersi_visited_mask[*mersi_pixel]:
             mersi_i, mersi_j = mersi_pixel
 
@@ -254,12 +268,22 @@ def aggregated_matching_stats(
 
             mersi_visited_mask[*window_mersi_pixels] = True
 
-            window_mersi_rad = image_mersi.radiance[*window_mersi_pixels].mean()
-            window_modis_rad = image_modis.radiance[*window_modis_pixels].mean()
-            rad_relation = window_mersi_rad / window_modis_rad
-            window_mersi_count =  image_mersi.counts[*window_mersi_pixels].mean()
+            window_mersi_rad = image_mersi.radiance[*window_mersi_pixels]
+            window_modis_rad = image_modis.radiance[*window_modis_pixels]
+            window_mersi_rad_mean = window_mersi_rad.mean()
+            window_modis_rad_mean = window_modis_rad.mean()
+            rad_relation = window_mersi_rad_mean / window_modis_rad_mean
+            window_mersi_count = image_mersi.counts[*window_mersi_pixels].mean()
 
-            df.loc[len(df)] = [window_mersi_rad, window_modis_rad, rad_relation, window_mersi_count]
+            # Filtering windows by rstd
+            mersi_rstd = window_mersi_rad.std() / window_mersi_rad.mean()
+            modis_rstd = window_modis_rad.std() / window_modis_rad.mean()
+            if (mersi_rstd + modis_rstd) / 2 > 0.05:
+                continue
+
+            df.loc[df_i] = [window_mersi_rad_mean, window_modis_rad_mean, rad_relation, window_mersi_count]
+            df_i += 1
+    df = df.iloc[0: df_i]
 
     print("Pixels in statistics:", len(df))
     return df
@@ -280,6 +304,8 @@ def load_matching_pixels(
         rstd_kernel_size: int = KERNEL_SIZE,
         rstd_threshold: float = RSTD_THRESHOLD,
 
+        exclude_overflow: bool = True,
+
         force_recalculate=False,
 ) -> list[tuple[int, int], tuple[int, int]]:
     file_path = get_matching_pixels_filename(
@@ -288,6 +314,7 @@ def load_matching_pixels(
         exclude_clouds, exclude_land, exclude_water,
         do_erosion, correct_cloud_movement,
         use_rstd_filtering, rstd_kernel_size, rstd_threshold,
+        exclude_overflow,
     )
     if os.path.exists(file_path) and not force_recalculate:
         with open(file_path, "rb") as file:
@@ -300,6 +327,7 @@ def load_matching_pixels(
             exclude_clouds, exclude_land, exclude_water,
             do_erosion, correct_cloud_movement,
             use_rstd_filtering, rstd_kernel_size, rstd_threshold,
+            exclude_overflow
         )
         with open(file_path, "wb") as file:
             pickle.dump(pixels, file)

@@ -17,7 +17,7 @@ def find_close_timedelta_imgs(
     while l1 and l2:
         t1 = l1[0].dt
         t2 = l2[0].dt
-        if abs(t1 - t2) < max_diff:
+        if abs(t1 - t2) <= max_diff:
             result.append((l1.pop(0), l2.pop(0)))
         else:
             if t1 < t2:

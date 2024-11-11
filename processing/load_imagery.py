@@ -60,6 +60,7 @@ def iterate_image_groups(
 def iterate_mersi(
         band: str,
         interval: tuple[datetime, datetime] = None,
+        dts: list[datetime] = None,
 ) -> Generator[MERSIImage, None, None]:
     mersi_files = group_mersi_files()
     if interval:
@@ -68,6 +69,13 @@ def iterate_mersi(
             dt = get_mersi_file_dt(files_pair[0])
             if interval[0] <= dt <= interval[1]:
                 filtered_files.append(files_pair)
+        mersi_files = filtered_files
+    elif dts:
+        filtered_files = []
+        for dt in dts:
+            for files_pair in mersi_files:
+                if get_mersi_file_dt(files_pair[0]) == dt:
+                    filtered_files.append(files_pair)
         mersi_files = filtered_files
     for mersi_l1_path, mersi_l1_geo_path in mersi_files:
         img = MERSIImage(mersi_l1_path, mersi_l1_geo_path, band)

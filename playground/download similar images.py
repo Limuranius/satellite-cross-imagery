@@ -5,18 +5,23 @@ from matplotlib import pyplot as plt
 from light_info.MERSIInfo import MERSIInfo
 import visuals.map_2d
 from light_info.MODISInfo import MODISInfo
+from light_info.MODIS_database import collect_data
 from light_info.utils import find_close_timedelta_imgs, intersection_percent
 from web.downloader import download_mersi_files, download_modis_files
 
-START = datetime.datetime(2024, 9, 4)
-END = datetime.datetime(2024, 9, 5)
+START = datetime.datetime(2019, 1, 4, 22)
+END = datetime.datetime(2019, 1, 5)
 # LON = 140
 # LAT = 35.5
 LON = -43
 LAT = 69
 MIN_INTERSECTION_PERCENT = 0.4
-MAX_TIME_DELTA = datetime.timedelta(minutes=5)
+MAX_TIME_DELTA = datetime.timedelta(minutes=0)
 
+# collect_data(
+#     datetime.date(2019, 1, 1),
+#     datetime.date(2019, 6, 1),
+# )
 list_modis = MODISInfo.find(
     START, END,
     # (LON, LAT)
@@ -38,7 +43,7 @@ for pair in pairs:
     except Exception:
         continue
 pairs = pairs_good
-pairs = pairs[:-3]
+# pairs = pairs[:-3]
 print("Closely overlapping pairs:", len(pairs))
 
 list_modis = [pair[0] for pair in pairs]
