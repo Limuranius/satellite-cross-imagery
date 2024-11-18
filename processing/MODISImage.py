@@ -1,8 +1,10 @@
+import os
 from datetime import datetime
 
 import numpy as np
 from pyhdf.SD import SD
 
+from paths import MODIS_L1B_DIR, MODIS_L1B_GEO_DIR
 from .SatelliteImage import SatelliteImage
 
 MODIS_BANDS = ["8", "9", "10", "11", "12", "13lo", "13hi", "14lo", "14hi", "15", "16", "17", "18", "19", "26"]
@@ -95,6 +97,18 @@ class MODISImage(SatelliteImage):
         channels = [r, g, b]
         img = np.array(channels).transpose(1, 2, 0)
         return img
+
+    @staticmethod
+    def from_dt(dt: datetime, band: str):
+        l1b_file_start = dt.strftime("MYD021KM.A%Y%j.%H%M")
+        l1b_geo_file_start = dt.strftime("MYD03.A%Y%j.%H%M")
+        for l1b_filename in os.listdir(MODIS_L1B_DIR):
+            if l1b_filename.startswith(l1b_file_start):
+                l1b_path = os.path.join(MODIS_L1B_DIR, l1b_filename)
+        for l1b_geo_filename in os.listdir(MODIS_L1B_GEO_DIR):
+            if l1b_geo_filename.startswith(l1b_geo_file_start):
+                l1b_geo_path = os.path.join(MODIS_L1B_GEO_DIR, l1b_geo_filename)
+        return MODISImage(l1b_path, l1b_geo_path, band)
 
 
 def extract_date_str(meta):

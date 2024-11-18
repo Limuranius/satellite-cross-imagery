@@ -20,13 +20,11 @@ from .Info import Info
 class MERSIInfo(Info):
     @staticmethod
     def find(
-            start: datetime.date,
-            end: datetime.date,
+            start: datetime.datetime,
+            end: datetime.datetime,
             point: LonLat = None
     ) -> list[Info]:
         from . import MERSI_database
-        start = datetime.datetime.combine(start, datetime.datetime.min.time())
-        end = datetime.datetime.combine(end, datetime.datetime.min.time())
         step = datetime.timedelta(minutes=5)
         dt = start
         result = []
@@ -60,6 +58,11 @@ class MERSIInfo(Info):
             result = [info for info in result if info.contains_pos(lon, lat)]
 
         return result
+
+    @staticmethod
+    def from_dts(dts: list[datetime.datetime]) -> list[Info]:
+        from . import MERSI_database
+        return [MERSI_database.get_by_dt(dt) for dt in dts]
 
     @staticmethod
     def request_dts(dts: list[datetime.datetime]) -> list[MERSIInfo | datetime.datetime]:

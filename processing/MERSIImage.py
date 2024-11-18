@@ -1,3 +1,4 @@
+import os.path
 from datetime import datetime
 from math import pi
 
@@ -5,6 +6,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 
+from paths import MERSI_L1_DIR, MERSI_L1_GEO_DIR
 from .SatelliteImage import SatelliteImage
 
 MERSI_2_BANDS = ["5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"]
@@ -107,3 +109,11 @@ class MERSIImage(SatelliteImage):
             channels = [r, g, b]
             img = np.array(channels).transpose(1, 2, 0)
             return img
+
+    @classmethod
+    def from_dt(cls, dt: datetime, band: str):
+        l1_fmt = "FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF"
+        l1_geo_fmt = "FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_GEO1K_MS.HDF"
+        l1_path = os.path.join(MERSI_L1_DIR, dt.strftime(l1_fmt))
+        l1_geo_path = os.path.join(MERSI_L1_GEO_DIR, dt.strftime(l1_geo_fmt))
+        return MERSIImage(l1_path, l1_geo_path, band)

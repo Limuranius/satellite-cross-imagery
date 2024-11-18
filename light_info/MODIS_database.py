@@ -1,6 +1,7 @@
 import csv
 import datetime as dt
 import itertools
+from datetime import datetime
 
 import requests
 from dateutil.relativedelta import relativedelta
@@ -113,7 +114,14 @@ def collect_data(
         t = t_next
         pbar.update(1)
 
-    lines = [to_line(info) for info in result]
+    # Removing dates that already have been ordered
+    with open(CSV_PATH) as csvfile:
+        reader = csv.reader(csvfile)
+        previous_data = [*reader]
+        existing_dates = set([dt.datetime.fromisoformat(line[8]) for line in previous_data])
+    result = [info for info in result if info.dt not in existing_dates]
+
+    lines = previous_data + [to_line(info) for info in result]
     with open(CSV_PATH, "w", newline="") as file:
         csv.writer(file).writerows(lines)
 
@@ -136,5 +144,17 @@ def load_data(
                 lon, lat = point
                 is_good = is_good and info.contains_pos(lon, lat)
             if is_good:
+                result.append(info)
+    return result
+
+
+def load_dts(dts: list[datetime]) -> list[MODISInfo]:
+    result = []
+    with open(CSV_PATH) as csvfile:
+        reader = csv.reader(csvfile)
+        data = [*reader]
+        for line in data:
+            info = parse_line(line)
+            if info.dt in dts:
                 result.append(info)
     return result

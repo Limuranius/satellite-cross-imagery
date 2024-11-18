@@ -34,6 +34,12 @@ def intersection_percent(info1: Info, info2: Info) -> float:
     )
 
 
+def mean_longitude_difference(info1: Info, info2: Info) -> float:
+    lon1 = (info1.p1[0] + info1.p2[0] + info1.p3[0] + info1.p4[0]) / 4
+    lon2 = (info2.p1[0] + info2.p2[0] + info2.p3[0] + info2.p4[0]) / 4
+    return abs(lon1 - lon2)
+
+
 def find_similar_images(
         start: datetime.date,
         end: datetime.date,

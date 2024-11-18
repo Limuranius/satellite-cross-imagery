@@ -25,9 +25,7 @@ def get_matching_pixels(
     coords = np.array([image_mersi.longitude, image_mersi.latitude])
     coords = coords.transpose((1, 2, 0))
     coords = coords.reshape((-1, 2))  # flatten
-    print("Matching pixels...")
     fast_match = image_modis.geo_kdtree.query(coords)
-    print("Done...")
     distance, indices = fast_match
 
     max_distance = 0.01
@@ -320,6 +318,7 @@ def load_matching_pixels(
         with open(file_path, "rb") as file:
             return pickle.load(file)
     else:
+        print("Matching pixels... ", end="")
         pixels = get_matching_pixels(image_mersi, image_modis)
         pixels = filter_matching_pixels(
             image_mersi, image_modis, pixels,
@@ -329,6 +328,7 @@ def load_matching_pixels(
             use_rstd_filtering, rstd_kernel_size, rstd_threshold,
             exclude_overflow
         )
+        print("Done!")
         with open(file_path, "wb") as file:
             pickle.dump(pixels, file)
         return pixels

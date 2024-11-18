@@ -36,6 +36,11 @@ class MODISInfo(Info):
         # else:
         #     return MODIS_database.load_data(start, end)
 
+    @staticmethod
+    def from_dts(dts: list[datetime.datetime]):
+        from . import MODIS_database
+        return MODIS_database.load_dts(dts)
+
     def get_file_url(self) -> str:
         return "https://ladsweb.modaps.eosdis.nasa.gov" + self.fileURL
 

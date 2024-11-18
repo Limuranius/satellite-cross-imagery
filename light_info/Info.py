@@ -32,6 +32,11 @@ class Info(ABC):
             corners
         )
 
+    def center_coord(self) -> LonLat:
+        lon = (self.p1[0] + self.p2[0] + self.p3[0] + self.p4[0]) / 4
+        lat = (self.p1[1] + self.p2[1] + self.p3[1] + self.p4[1]) / 4
+        return lon, lat
+
     @staticmethod
     @abstractmethod
     def find(
