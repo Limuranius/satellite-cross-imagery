@@ -1,9 +1,18 @@
 import numpy as np
 
 
+def load_coeffs() -> np.ndarray:
+    path = "/home/gleb123/satellite-cross-imagery/calibration/fix_channel_8/coeff_table_8.txt"
+    coeffs = []
+    with open(path) as file:
+        for line in file:
+            coeffs.append(list(map(float, line.split())))
+    return np.array(coeffs)
+
+
 def apply_coeffs(image: np.ndarray, coeffs: np.ndarray):
     """
-    image - uint8[2000, 2048]
+    image - int16[2000, 2048]
     coeffs - float[10, 10]
     """
     height = image.shape[0]

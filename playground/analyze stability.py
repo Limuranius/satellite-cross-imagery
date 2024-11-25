@@ -1,5 +1,6 @@
 import math
 from datetime import datetime
+from tabnanny import check
 
 import h5py
 import matplotlib
@@ -35,7 +36,7 @@ MATCHING_PIXELS_KWARGS = dict(
     exclude_overflow=True,
 )
 
-MERSI_BAND, MODIS_BAND = "10", "10"
+MERSI_BAND, MODIS_BAND = "8", "8"
 
 # OVERLAPPING_SWATH_START = datetime(2024, 9, 4, 14, 20)
 # OVERLAPPING_SWATH_END = datetime(2024, 9, 4, 14, 55)
@@ -51,16 +52,57 @@ MERSI_BAND, MODIS_BAND = "10", "10"
 #     )
 # ]
 
+# OVERLAPPING_IMAGERY_DTS = [
+#     # datetime(2024, 2, 11, 23, 20),
+#     *datetime_range(
+#         datetime(2024, 9, 4, 14, 20),
+#         datetime(2024, 9, 4, 14, 55),
+#     ),
+#     *datetime_range(
+#         datetime(2024, 2, 11, 23, 0),
+#         datetime(2024, 2, 11, 23, 35),
+#     ),
+# ]
+
 OVERLAPPING_IMAGERY_DTS = [
+    # datetime(2024, 1, 2, 8, 25),
+    # datetime(2024, 2, 11, 23, 00),
     # datetime(2024, 2, 11, 23, 20),
-    *datetime_range(
-        datetime(2024, 9, 4, 14, 20),
-        datetime(2024, 9, 4, 14, 55),
-    ),
-    *datetime_range(
-        datetime(2024, 2, 11, 23, 0),
-        datetime(2024, 2, 11, 23, 35),
-    ),
+    datetime(2024, 2, 11, 23, 30),
+    # datetime(2024, 2, 29, 15, 45),
+    # datetime(2024, 4, 2, 11, 15),
+    # datetime(2024, 5, 7, 17, 15),
+    # datetime(2024, 5, 20, 6, 25),
+    # datetime(2024, 6, 6, 19, 40),
+    # datetime(2024, 6, 21, 20, 00),
+    # datetime(2024, 7, 9, 7, 40),
+    # datetime(2024, 8, 3, 6, 30),
+    # datetime(2024, 8, 23, 5, 15),
+    #
+    # # datetime.fromisoformat("2024-01-07 12:00:00"),
+    # datetime.fromisoformat("2024-01-22 17:25:00"),
+    # datetime.fromisoformat("2024-02-04 08:20:00"),
+    # datetime.fromisoformat("2024-02-22 02:40:00"),
+    # datetime.fromisoformat("2024-03-25 22:10:00"),
+    # datetime.fromisoformat("2024-04-15 02:05:00"),
+    # datetime.fromisoformat("2024-05-07 18:55:00"),
+    #
+    # datetime.fromisoformat("2024-01-12 13:50:00"),
+    # datetime.fromisoformat("2024-01-17 15:40:00"),
+    # datetime.fromisoformat("2024-01-22 17:30:00"),
+    # datetime.fromisoformat("2024-01-30 06:35:00"),
+    # datetime.fromisoformat("2024-02-04 08:20:00"),
+    # datetime.fromisoformat("2024-02-06 21:15:00"),
+    # datetime.fromisoformat("2024-02-09 10:10:00"),
+    # datetime.fromisoformat("2024-02-14 12:00:00"),
+    # datetime.fromisoformat("2024-02-29 15:45:00"),
+    # datetime.fromisoformat("2024-04-15 02:00:00"),
+    # datetime.fromisoformat("2024-04-30 04:15:00"),
+    # datetime.fromisoformat("2024-05-02 17:00:00"),
+    # datetime.fromisoformat("2024-05-12 17:15:00"),
+    # datetime.fromisoformat("2024-05-15 06:10:00"),
+    # datetime.fromisoformat("2024-06-06 19:35:00"),
+    # datetime.fromisoformat("2024-10-01 20:00:00"),
 ]
 
 # OVERLAPPING_IMAGERY_DTS = [
@@ -304,6 +346,7 @@ def show_pixel_outliers(
         pixels,
 ):
     stats = matching.matching_stats(img_mersi, img_modis, pixels)
+    # stats = matching.aggregated_matching_stats(img_mersi, img_modis, pixels)
     colored_img_mersi = img_mersi.colored_image()
     colored_img_modis = img_modis.colored_image()
     match_mersi = np.zeros_like(colored_img_mersi)
@@ -312,7 +355,6 @@ def show_pixel_outliers(
         match_mersi[*mersi_pixel] = colored_img_mersi[*mersi_pixel]
         match_modis[*modis_pixel] = colored_img_modis[*modis_pixel]
 
-    _, ax = plt.subplots(ncols=3)
     _, axis = plt.subplot_mosaic("ABC;DEF")
     ax_mersi_full = axis["A"]
     ax_mersi_match = axis["B"]
@@ -340,15 +382,19 @@ def show_pixel_outliers(
     relplot_with_linregress(stats["mersi_rad"], stats["modis_rad"], ax_relation)
     ax_relation.set_xlabel("MERSI radiance")
     ax_relation.set_ylabel("MODIS radiance")
+    # ax_relation.set_xlim(0, 500)
+    # ax_relation.set_ylim(0, 250)
 
     relplot_with_linregress(stats["mersi_rad"], stats["modis_rad"] / stats["mersi_rad"], ax_rad_rel_relation)
     ax_rad_rel_relation.set_xlabel("MERSI radiance")
     ax_rad_rel_relation.set_ylabel("MODIS radiance / MERSI radiance")
+    # ax_rad_rel_relation.set_xlim(0, 500)
+    # ax_rad_rel_relation.set_ylim(0.2, 0.7)
 
     plt.tight_layout()
-    plt.savefig(f"stability test/images/{img_mersi.dt}.png")
-    plt.close()
-    # plt.show()
+    # plt.savefig(f"stability test/images/{img_mersi.dt}.png")
+    # plt.close()
+    plt.show()
 
 
 def apply_amplifier_correction(
@@ -520,15 +566,167 @@ def rad_rel_relation(
     # plt.show()
 
 
+def calculate_transform_coeff():
+    file_path = f"stability test/{MERSI_BAND} {MODIS_BAND}.pkl"
+    df = pd.read_pickle(file_path)
+    x = df["mersi_rad"]
+    y = df["modis_rad"]
+    lin = linregress(x, y)
+    print(len(df))
+    print(lin.slope, lin.intercept, lin.rvalue ** 2)
+    print(len(df["image_number"].unique()))
+
+
+def check_band8_sensor0_calibration():
+    import calibration
+    import os
+    import cv2
+    import paths
+
+    sensor_0_df = pd.DataFrame(columns=[
+        "mersi_rad_orig",
+        "mersi_rad_calib",
+        "modis_rad_orig",
+        "modis_rad_transformed",
+        "mersi_counts_orig",
+        "mersi_counts_calib",
+    ])
+    transform_coeff = 1 / 0.5087298516578596
+    coeffs = calibration.fix_channel_8.apply_coeffs.load_coeffs()
+    pbar = tqdm.tqdm(desc="Calibrating band 8 sensor 0 and collecting stats...")
+    for i, (img_mersi, img_modis) in enumerate(generate_iterator("8", "8")):
+
+        # fmt = "%Y%m%d %H%M.png"
+        # file_path = os.path.join("/home/gleb123/Документы/20.11.24/Размеченные данные/До разметки", img_mersi.dt.strftime(fmt))
+        # img = img_mersi.counts.copy()
+        # vmin = 500
+        # vmax = 1500
+        # img[img < vmin] = vmin
+        # img[img > vmax] = vmax
+        # img -= vmin
+        # img = img / (vmax - vmin) * 4095
+        # img = (img // 16).astype(np.uint8)
+        # cv2.imwrite(file_path, img)
+
+        pixels = load_matching_pixels(
+            img_mersi, img_modis,
+            **MATCHING_PIXELS_KWARGS,
+        )
+        wanted_pixels = calibration.manually_draw_edges.mask2d_to_coordinates(calibration.manually_draw_edges.load_edge_mask(img_mersi.dt, [0, 0, 255]))
+        wanted_pixels = set(tuple(i) for i in wanted_pixels)
+        pixels = [pair for pair in pixels if pair[0] in wanted_pixels]
+        if len(pixels) == 0:
+            continue
+
+        stats_before = matching.matching_stats(img_mersi, img_modis, pixels)
+
+        # # Look at matching pixels
+        # visualize_matching_pixels(img_mersi, img_modis, pixels)
+        # plt.show()
+        #
+        # Comparing images before and after
+        # img_before = img_mersi.counts.copy()
+        img_mersi.counts = calibration.fix_channel_8.apply_coeffs.apply_coeffs(img_mersi.counts, coeffs)
+        # img_after = img_mersi.counts.copy()
+        # _, ax = plt.subplots(ncols=2, sharey=True, sharex=True)
+        # ax[0].imshow(img_before, vmin=800, vmax=1100)
+        # ax[1].imshow(img_after, vmin=800, vmax=1100)
+        # ax[0].set_title("До калибровки")
+        # ax[1].set_title("После калибровки")
+        # plt.tight_layout()
+        # plt.show()
+
+        stats_after = matching.matching_stats(img_mersi, img_modis, pixels)
+
+        stats_before = stats_before[stats_before["mersi_y"] % 10 == 0]
+        stats_after = stats_after[stats_after["mersi_y"] % 10 == 0]
+
+        assert len(stats_before) == len(stats_after)
+
+        tmp = pd.DataFrame({
+            "mersi_rad_orig": stats_before["mersi_rad"],
+            "mersi_rad_calib": stats_after["mersi_rad"],
+            "modis_rad_orig": stats_before["modis_rad"],
+            "modis_rad_transformed": (stats_before["modis_rad"] * transform_coeff),
+            "mersi_counts_orig": stats_before["mersi_counts"],
+            "mersi_counts_calib": stats_after["mersi_counts"],
+        })
+        sensor_0_df = pd.concat([sensor_0_df, tmp])
+        pbar.update(1)
+
+    # diff_before = sensor_0_df["mersi_rad_orig"] - sensor_0_df["modis_rad_transformed"]
+    # diff_after = sensor_0_df["mersi_rad_calib"] - sensor_0_df["modis_rad_transformed"]
+    #
+    # _, ax = plt.subplots(ncols=2, sharex=True, sharey=True)
+    # ax[0].hist(diff_before, bins=50)
+    # ax[0].set_title("Before")
+    #
+    # ax[1].hist(diff_after, bins=50)
+    # ax[1].set_title("After")
+    #
+    # print("Before:")
+    # print(diff_before.mean())
+    # print(diff_before.std())
+    # print("After:")
+    # print(diff_after.mean())
+    # print(diff_after.std())
+    #
+    # plt.show()
+
+    # _, ax = plt.subplots(ncols=2, sharex=True, sharey=True)
+    # ax[0].hist(sensor_0_df["mersi_counts_orig"], bins=50)
+    # ax[0].set_title("Before")
+    # ax[1].hist(sensor_0_df["mersi_counts_calib"], bins=50)
+    # ax[1].set_title("After")
+    # plt.show()
+
+    # plt.plot(sensor_0_df["mersi_counts_orig"] - sensor_0_df["mersi_counts_calib"])
+    # plt.show()
+
+    # plt.plot(sensor_0_df["mersi_rad_orig"].tolist())
+    # plt.plot(sensor_0_df["mersi_rad_calib"].tolist())
+    # plt.plot(sensor_0_df["modis_rad_transformed"].tolist())
+    # plt.legend(["MERSI orig", "MERSI calib", "MODIS transformed"])
+    # plt.title("Данные до и после калибровки датчика 0 канала 8")
+    # plt.xlabel("pixel index")
+    # plt.ylabel("radiance")
+    # plt.show()
+
+    plt.plot((sensor_0_df["mersi_rad_orig"] - sensor_0_df["modis_rad_transformed"]).tolist())
+    plt.plot((sensor_0_df["mersi_rad_calib"] - sensor_0_df["modis_rad_transformed"]).tolist())
+    plt.legend(["До коррекци", "После коррекции"])
+    plt.xlabel("pixel index")
+    plt.ylabel("MERSI radiance - MODIS radiance")
+    plt.show()
+
+
+def check_band12_calibration():
+    import calibration
+
+    coeffs = calibration.fix_channel_12.apply_coeffs.load_coeffs()
+    for i, (img_mersi, img_modis) in enumerate(generate_iterator("12", "13hi")):
+        # Comparing images before and after
+        img_before = img_mersi.counts.copy()
+        img_mersi.counts = calibration.fix_channel_12.apply_coeffs.apply_coeffs(img_mersi.counts, coeffs)
+        img_after = img_mersi.counts.copy()
+        _, ax = plt.subplots(ncols=2, sharey=True, sharex=True)
+        ax[0].imshow(img_before, vmin=350, vmax=700)
+        ax[1].imshow(img_after, vmin=350, vmax=700)
+        ax[0].set_title("До калибровки")
+        ax[1].set_title("После калибровки")
+        plt.tight_layout()
+        plt.show()
+
+
 # recalculate_matching_pixels()
 # save_stats(
 #     remove_amplifier=False,
 #     aggregate_stats=False,
-#     split_by_y=True,
+#     split_by_y=False,
 # )
 # look_at_matching_pixels(MERSI_BAND, MODIS_BAND)
 
-# pixels_relation_relplot(nrows=4, ncols=4)
+# pixels_relation_relplot(nrows=4, ncols=5)
 # iterate_images(georeference_stability)
 # iterate_images(show_relation_image)
 # iterate_images(rad_rel_relation)
@@ -545,8 +743,14 @@ def rad_rel_relation(
 # rad_solz_relation()
 
 
-iterate_images(show_pixel_outliers)
+iterate_images(show_pixel_outliers, mersi_band="10", modis_band="10")
+
+# calculate_transform_coeff()
+
 # iterate_images(show_hist)
+
+# check_band8_sensor0_calibration()
+# check_band12_calibration()
 
 # are_coefficients_same()
 # slope_statistics()

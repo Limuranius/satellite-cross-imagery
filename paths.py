@@ -17,6 +17,8 @@ MERSI_L1_GEO_DIR = join(MERSI_DIR, "L1 GEO")
 MATCHING_PIXELS_DIR = join(IMAGERY_DIR, "matching pixels")
 RSTD_MAPS_DIR = join(IMAGERY_DIR, "relative std maps")
 
+EDGE_MASKS_DIR = join(DIR_PATH, "calibration", "edge masks")
+
 for dir_path in [
     MODIS_L1B_DIR,
     MODIS_L1B_GEO_DIR,
@@ -27,5 +29,7 @@ for dir_path in [
 
     MATCHING_PIXELS_DIR,
     RSTD_MAPS_DIR,
+
+    EDGE_MASKS_DIR,
 ]:
     os.makedirs(dir_path, exist_ok=True)

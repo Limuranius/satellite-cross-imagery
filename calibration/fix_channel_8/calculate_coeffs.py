@@ -14,7 +14,7 @@ class Band8Optimizer:
         self.true_values = np.concatenate([
             calibration.utils.calculate_true_values(area, max_water_factor)
             for area in areas
-        ])
+        ], axis=1)
         self.true_noise = self.original_values - self.true_values
 
     def show(self):

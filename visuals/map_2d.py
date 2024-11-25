@@ -18,6 +18,10 @@ def show_image_boxes(
             corners = obj.get_corners_coords()
         else:
             raise Exception()
+        # folium.Marker(corners[0][::-1], "p1").add_to(map_obj)
+        # folium.Marker(corners[1][::-1], "p2").add_to(map_obj)
+        # folium.Marker(corners[2][::-1], "p3").add_to(map_obj)
+        # folium.Marker(corners[3][::-1], "p4").add_to(map_obj)
         folium.Polygon(
             reverse_coords(fix_antimeridian(corners)),
             color=random_color(),

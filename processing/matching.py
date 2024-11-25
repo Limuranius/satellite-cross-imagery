@@ -241,7 +241,6 @@ def aggregated_matching_stats(
     df = pd.DataFrame(columns=[
         "mersi_rad",
         "modis_rad",
-        "rad_relation",
         "mersi_count",
     ], index=range(len(pixels)))
     df_i = 0
@@ -249,7 +248,7 @@ def aggregated_matching_stats(
     mersi_visited_mask = np.zeros(shape=(2000, 2048), dtype=bool)
     indices = np.full(shape=(2000, 2048), fill_value=-1, dtype=int)
     indices[*mersi_pixels] = np.arange(len(pixels))
-
+    mersi_radiance = image_mersi.radiance
     for mersi_pixel, modis_pixel in tqdm.tqdm(pixels, desc="Aggregating statistics"):
         if not mersi_visited_mask[*mersi_pixel]:
             mersi_i, mersi_j = mersi_pixel
@@ -266,11 +265,10 @@ def aggregated_matching_stats(
 
             mersi_visited_mask[*window_mersi_pixels] = True
 
-            window_mersi_rad = image_mersi.radiance[*window_mersi_pixels]
+            window_mersi_rad = mersi_radiance[*window_mersi_pixels]
             window_modis_rad = image_modis.radiance[*window_modis_pixels]
             window_mersi_rad_mean = window_mersi_rad.mean()
             window_modis_rad_mean = window_modis_rad.mean()
-            rad_relation = window_mersi_rad_mean / window_modis_rad_mean
             window_mersi_count = image_mersi.counts[*window_mersi_pixels].mean()
 
             # Filtering windows by rstd
@@ -279,9 +277,13 @@ def aggregated_matching_stats(
             if (mersi_rstd + modis_rstd) / 2 > 0.05:
                 continue
 
-            df.loc[df_i] = [window_mersi_rad_mean, window_modis_rad_mean, rad_relation, window_mersi_count]
+            df.loc[df_i] = [window_mersi_rad_mean, window_modis_rad_mean, window_mersi_count]
             df_i += 1
     df = df.iloc[0: df_i]
+
+    df["mersi_rad"] = df["mersi_rad"].astype(float)
+    df["modis_rad"] = df["modis_rad"].astype(float)
+    df["mersi_count"] = df["mersi_count"].astype(float)
 
     print("Pixels in statistics:", len(df))
     return df

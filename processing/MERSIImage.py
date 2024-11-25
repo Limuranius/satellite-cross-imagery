@@ -73,28 +73,15 @@ class MERSIImage(SatelliteImage):
             self.dt = datetime.combine(date, time)
 
             band_index = MERSI_2_BANDS.index(band)
-            self.counts = hdf["Data"]["EV_1KM_RefSB"][band_index][:]
+            self.counts = hdf["Data"]["EV_1KM_RefSB"][band_index][:].astype(int)
 
             # Fix broken pixels
             self.counts[self.counts == 65535] = 0
 
-            vis_cal = hdf["Calibration"]["VIS_Cal_Coeff"]
+            self.vis_cal = hdf["Calibration"]["VIS_Cal_Coeff"][:]
             self.blackbody = hdf["Calibration"]["BB_DN_average"][band_index + 5]
             self.space_view = hdf["Calibration"]["SV_DN_average"][band_index + 5]
             self.voc = hdf["Calibration"]["VOC_DN_average"][band_index + 5]
-
-            bb_column = np.repeat(self.blackbody, 10).reshape((-1, 1))
-            sv_column = np.repeat(self.space_view, 10).reshape((-1, 1))
-
-            Cal_0, Cal_1, Cal_2 = vis_cal[band_index]
-            Slope = 1
-            Intercept = 0
-            # dn = (self.counts - sv_column) * Slope + Intercept
-            dn = self.counts * Slope + Intercept
-            Ref = Cal_2 * dn ** 2 + Cal_1 * dn + Cal_0
-
-            self.radiance = Ref / 100 * E0[band] / pi
-            self.reflectance = Ref / 100 * hdf.attrs["EarthSun Distance Ratio"] / np.cos(np.radians(self.solar_zenith / 100))
 
 
     def colored_image(self) -> np.ndarray:
@@ -117,3 +104,27 @@ class MERSIImage(SatelliteImage):
         l1_path = os.path.join(MERSI_L1_DIR, dt.strftime(l1_fmt))
         l1_geo_path = os.path.join(MERSI_L1_GEO_DIR, dt.strftime(l1_geo_fmt))
         return MERSIImage(l1_path, l1_geo_path, band)
+
+
+    @property
+    def radiance(self):
+        band_index = MERSI_2_BANDS.index(self.band)
+        Cal_0, Cal_1, Cal_2 = self.vis_cal[band_index]
+        Slope = 1
+        Intercept = 0
+        # dn = self.counts * Slope + Intercept
+        dn = (self.counts + 25) * Slope + Intercept
+        # sv_column = np.repeat(self.space_view, 10).reshape((-1, 1))
+        # dn = (self.counts + sv_column) * Slope + Intercept
+        Ref = Cal_2 * dn ** 2 + Cal_1 * dn + Cal_0
+        return Ref / 100 * E0[self.band] / pi
+
+    @property
+    def reflectance(self):
+        band_index = MERSI_2_BANDS.index(self.band)
+        Cal_0, Cal_1, Cal_2 = self.vis_cal[band_index]
+        Slope = 1
+        Intercept = 0
+        dn = self.counts * Slope + Intercept
+        Ref = Cal_2 * dn ** 2 + Cal_1 * dn + Cal_0
+        return Ref / 100 * hdf.attrs["EarthSun Distance Ratio"] / np.cos(np.radians(self.solar_zenith / 100))

@@ -2,8 +2,9 @@ import numpy as np
 
 
 def find_mean_water_brightness(area: np.ndarray) -> float:
-    hist_y, hist_x = np.histogram(area[area < 2000], bins=50)
-    return float((hist_x[hist_y.argmax()] + hist_x[hist_y.argmax() + 1]) / 2)
+    # hist_y, hist_x = np.histogram(area[(area < 1100) & (area > 400)], bins=50)
+    # return float((hist_x[hist_y.argmax()] + hist_x[hist_y.argmax() + 1]) / 2)
+    return np.quantile(area[area < 1000], 0.1)
 
 
 def calculate_water_mask(
