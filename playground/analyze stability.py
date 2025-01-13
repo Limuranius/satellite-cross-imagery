@@ -22,20 +22,6 @@ from visuals.graphs import relplot_with_linregress, scatter_with_density
 
 matplotlib.rcParams['figure.figsize'] = (30, 15)
 
-MATCHING_PIXELS_KWARGS = dict(
-    max_zenith_relative_diff=0.05,
-    max_zenith=3000,
-    exclude_clouds=False,
-    exclude_land=False,
-    exclude_water=False,
-    do_erosion=False,
-    correct_cloud_movement=False,
-    use_rstd_filtering=True,
-    rstd_kernel_size=5,
-    rstd_threshold=0.05,
-    exclude_overflow=True,
-)
-
 MERSI_BAND, MODIS_BAND = "8", "8"
 
 # OVERLAPPING_SWATH_START = datetime(2024, 9, 4, 14, 20)
@@ -123,56 +109,9 @@ generate_iterator = lambda mersi_band, modis_band: iterate_image_groups(
 
 
 def iterate_images(func, mersi_band=MERSI_BAND, modis_band=MODIS_BAND):
-    for i, (img_mersi, img_modis) in enumerate(generate_iterator(mersi_band, modis_band)):
-        pixels = load_matching_pixels(
-            img_mersi, img_modis,
-            **MATCHING_PIXELS_KWARGS,
-        )
-        func(img_mersi, img_modis, pixels)
-        print(i)
-
-
-def look_at_matching_pixels(mersi_band, modis_band):
-    for i, (img_mersi, img_modis) in enumerate(generate_iterator(mersi_band, modis_band)):
-        pixels = load_matching_pixels(
-            img_mersi, img_modis, **MATCHING_PIXELS_KWARGS,
-        )
-        visualize_matching_pixels(
-            img_mersi,
-            img_modis,
-            pixels
-        )
-        plt.show()
-        # plt.savefig(f"stability test/images/{i}.png")
-        # plt.close()
-        print(i)
-
-
-def georeference_stability(
-        img_mersi: MERSIImage,
-        img_modis: MODISImage,
-        pixels,
-):
-    distances = []
-    for mersi_coord, modis_coord in pixels:
-        mersi_lon = img_mersi.longitude[*mersi_coord]
-        mersi_lat = img_mersi.latitude[*mersi_coord]
-        modis_lon = img_modis.longitude[*modis_coord]
-        modis_lat = img_modis.latitude[*modis_coord]
-        dist = math.sqrt((mersi_lon - modis_lon) ** 2 + (mersi_lat - modis_lat) ** 2)
-        distances.append(dist)
-    plt.hist(distances, bins=100)
-    plt.show()
-
-
-def recalculate_matching_pixels():
-    for img_mersi, img_modis in tqdm.tqdm(generate_iterator(MERSI_BAND, MODIS_BAND),
-                                          desc="Recalculating matching pixels"):
-        pixels = load_matching_pixels(
-            img_mersi, img_modis,
-            # force_recalculate=True
-            **MATCHING_PIXELS_KWARGS,
-        )
+    for i, matching_pair in enumerate(generate_iterator(mersi_band, modis_band)):
+        pixels = matching_pair.load_matching_pixels()
+        func(matching_pair.img_mersi, matching_pair.img_modis, pixels)
 
 
 def save_stats(
@@ -181,8 +120,8 @@ def save_stats(
         split_by_y: bool
 ):
     dfs = []
-    for i, (img_mersi, img_modis) in enumerate(generate_iterator(MERSI_BAND, MODIS_BAND)):
-        pixels = load_matching_pixels(img_mersi, img_modis, **MATCHING_PIXELS_KWARGS)
+    for i, matching_pair in enumerate(generate_iterator(MERSI_BAND, MODIS_BAND)):
+        pixels = matching_pair.load_matching_pixels()
 
         if remove_amplifier:
             apply_amplifier_correction(img_mersi)
@@ -297,16 +236,6 @@ def multiple_calibration(mersi_band):
 
     for i, img_mersi in enumerate(iterate_mersi(
             band=mersi_band,
-            # interval=(
-            #         OVERLAPPING_SWATH_START - timedelta(minutes=20),
-            #         OVERLAPPING_SWATH_END,
-            # )
-            # dts=[
-            #         datetime(2024, 9, 4, 14, 0),
-            #         datetime(2024, 9, 4, 14, 5),
-            #         datetime(2024, 9, 4, 14, 10),
-            #         datetime(2024, 9, 4, 14, 15),
-            #     ] + OVERLAPPING_IMAGERY_DTS
             dts=OVERLAPPING_IMAGERY_DTS
     )):
         bb.append(img_mersi.blackbody)
@@ -612,7 +541,8 @@ def check_band8_sensor0_calibration():
             img_mersi, img_modis,
             **MATCHING_PIXELS_KWARGS,
         )
-        wanted_pixels = calibration.manually_draw_edges.mask2d_to_coordinates(calibration.manually_draw_edges.load_edge_mask(img_mersi.dt, [0, 0, 255]))
+        wanted_pixels = calibration.manually_draw_edges.mask2d_to_coordinates(
+            calibration.manually_draw_edges.load_edge_mask(img_mersi.dt, [0, 0, 255]))
         wanted_pixels = set(tuple(i) for i in wanted_pixels)
         pixels = [pair for pair in pixels if pair[0] in wanted_pixels]
         if len(pixels) == 0:
@@ -698,24 +628,6 @@ def check_band8_sensor0_calibration():
     plt.xlabel("pixel index")
     plt.ylabel("MERSI radiance - MODIS radiance")
     plt.show()
-
-
-def check_band12_calibration():
-    import calibration
-
-    coeffs = calibration.fix_channel_12.apply_coeffs.load_coeffs()
-    for i, (img_mersi, img_modis) in enumerate(generate_iterator("12", "13hi")):
-        # Comparing images before and after
-        img_before = img_mersi.counts.copy()
-        img_mersi.counts = calibration.fix_channel_12.apply_coeffs.apply_coeffs(img_mersi.counts, coeffs)
-        img_after = img_mersi.counts.copy()
-        _, ax = plt.subplots(ncols=2, sharey=True, sharex=True)
-        ax[0].imshow(img_before, vmin=350, vmax=700)
-        ax[1].imshow(img_after, vmin=350, vmax=700)
-        ax[0].set_title("До калибровки")
-        ax[1].set_title("После калибровки")
-        plt.tight_layout()
-        plt.show()
 
 
 # recalculate_matching_pixels()

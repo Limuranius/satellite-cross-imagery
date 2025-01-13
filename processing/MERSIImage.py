@@ -75,6 +75,20 @@ class MERSIImage(SatelliteImage):
             band_index = MERSI_2_BANDS.index(band)
             self.counts = hdf["Data"]["EV_1KM_RefSB"][band_index][:].astype(int)
 
+            # Исправляем добавку темнового сигнала
+            match self.band:
+                case "8":
+                    add_count = 17
+                case "10":
+                    add_count = 25
+                case "11":
+                    add_count = 23
+                case "12":
+                    add_count = 16
+                case _:
+                    add_count = 0
+            self.counts += add_count
+
             # Fix broken pixels
             self.counts[self.counts == 65535] = 0
 
@@ -112,8 +126,8 @@ class MERSIImage(SatelliteImage):
         Cal_0, Cal_1, Cal_2 = self.vis_cal[band_index]
         Slope = 1
         Intercept = 0
-        # dn = self.counts * Slope + Intercept
-        dn = (self.counts + 25) * Slope + Intercept
+
+        dn = self.counts * Slope + Intercept
         # sv_column = np.repeat(self.space_view, 10).reshape((-1, 1))
         # dn = (self.counts + sv_column) * Slope + Intercept
         Ref = Cal_2 * dn ** 2 + Cal_1 * dn + Cal_0

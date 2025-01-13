@@ -1,5 +1,10 @@
+import bisect
 import datetime
 
+import folium
+
+import visuals.map_2d
+from custom_types import LonLat
 from light_info.Info import Info
 import utils
 from light_info.MERSIInfo import MERSIInfo
@@ -67,3 +72,44 @@ def find_similar_images(
     print("Closely overlapping pairs:", len(pairs))
 
     return pairs
+
+
+def find_info_timedelta(
+        infos: list[Info],  # Отсортирован по Info.dt
+        t: datetime.datetime,
+        max_delta: datetime.timedelta,
+) -> list[Info]:
+    """Находит все info, которые по времени различаются с t максимум на max_delta
+    infos должен быть остсортирован по возрастанию Info.dt"""
+    i = bisect.bisect_left(infos, t, key=lambda info: info.dt)
+    res = []
+    left_i = i
+    while 0 <= left_i < len(infos) and abs(infos[left_i].dt - t) <= max_delta:
+        res.append(infos[left_i])
+        left_i -= 1
+    right_i = i + 1
+    while 0 <= right_i < len(infos) and abs(infos[right_i].dt - t) <= max_delta:
+        res.append(infos[right_i])
+        right_i += 1
+    return res
+
+
+def find_info_timedelta_containing_point(
+        infos: list[Info],
+        t: datetime.datetime,
+        max_delta: datetime.timedelta,
+        pos: LonLat
+) -> Info | None:
+    infos = find_info_timedelta(infos, t, max_delta)
+    for info in infos:
+        if info.contains_pos(*pos):
+            # print("COOL")
+            return info
+    # map_obj = visuals.map_2d.show_image_boxes(infos)
+    # folium.Marker(pos[::-1]).add_to(map_obj)
+    # map_obj.show_in_browser()
+
+    return None
+
+
+

@@ -28,6 +28,6 @@ def show_image_boxes(
             popup=f"{obj.dt}"
         ).add_to(map_obj)
 
-    map_obj.show_in_browser()
+    # map_obj.show_in_browser()
     return map_obj
 

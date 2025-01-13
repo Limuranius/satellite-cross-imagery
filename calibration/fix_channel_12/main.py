@@ -37,7 +37,7 @@ for dt in IMAGERY_DTS:
         image,
         edge_mask=calibration.manually_draw_edges.load_edge_mask(dt, "12"),
         left_width=30,
-        right_width=30,
+        right_width=15,
     )
     print(len(image_areas))
     areas += image_areas
@@ -48,24 +48,30 @@ opt = calculate_coeffs.Band12Optimizer(
     max_water_factor=2.0,
 )
 # opt.show()
-SENSOR = 5
+SENSOR = 0
 
-win_size, coeffs = opt.calculate_coeffs(SENSOR, min_win_size=5, max_win_size=11)
-opt.noise_diff_relation(SENSOR, win_size, areas_indices=[1, 5, 6])
-opt.noise_diff_relation(SENSOR, win_size, areas_indices=range(7, 16))
+for sensor in range(10):
+    win_size, coeffs = opt.calculate_coeffs(sensor, min_win_size=3, max_win_size=4)
+    print(win_size, *coeffs)
 
 
-# print(opt._Band12Optimizer__error_function(coeffs, win_size, SENSOR))
-coeffs[0] /= 5
-coeffs[1] *= 1.7
-# print(opt._Band12Optimizer__error_function(coeffs, win_size, SENSOR))
+# area_i = 11
+# plt.plot(opt.true_noise[area_i][SENSOR])
+# plt.plot(calculate_coeffs.right_avg_weighted_convolve(opt.original_values[1][SENSOR], 8) - 120)
+# plt.plot(calculate_coeffs.diff_right_window(opt.original_values[area_i][SENSOR], 10) * 0.6)
+# plt.show()
 
-x = np.arange(2700)
+# win_size, coeffs = opt.calculate_coeffs(SENSOR, min_win_size=5, max_win_size=11)
+win_size, coeffs = opt.calculate_coeffs(SENSOR, min_win_size=2, max_win_size=5)
+print(win_size, *coeffs)
+# opt.noise_diff_relation(SENSOR, win_size, areas_indices=[1, 5, 6])
+# opt.noise_diff_relation(SENSOR, win_size, areas_indices=range(7, 16))
+# plt.legend(["2024-06-06 19:35:00", "2024-10-01 20:00:00"])
+opt.noise_diff_relation(SENSOR, win_size)
+x = np.arange(600)
 y = x * coeffs[0] + x ** 2 * coeffs[1]
 plt.plot(x, y, "r-")
 plt.text(0, y.max(), f"y={coeffs[0]:.4f}x + {coeffs[1]:.7f}x^2\nwindow_size={win_size}")
-plt.legend(["2024-06-06 19:35:00", "2024-10-01 20:00:00"])
 # plt.savefig(f"/home/gleb123/Документы/20.11.24 10 канал/Коэффициенты/д{SENSOR}.png")
 plt.show()
 
-print(win_size, *coeffs)

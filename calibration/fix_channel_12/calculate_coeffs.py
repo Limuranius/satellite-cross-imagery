@@ -38,8 +38,9 @@ class Band12Optimizer:
             noise = self.true_noise[i]
             orig = orig[sensor]
             noise = noise[sensor]
-            means = right_avg_convolve(orig, window_size)
-            diff = means - orig
+            # means = right_avg_convolve(orig, window_size)
+            # diff = means - orig
+            diff = diff_right_window(orig, window_size)
             diffs += list(diff[noise > 0])
             noises += list(noise[noise > 0])
         plt.scatter(diffs, noises)
@@ -78,8 +79,9 @@ class Band12Optimizer:
         a, b = coeffs
         for area in self.original_values:
             sensor_values = area[sensor]
-            avg_values = right_avg_convolve(sensor_values, win_size)
-            diff = avg_values - sensor_values
+            # avg_values = right_avg_convolve(sensor_values, win_size)
+            # diff = avg_values - sensor_values
+            diff = diff_right_window(sensor_values, win_size)
             diff_coeff = a * diff + b * diff ** 2
             results.append(diff_coeff)
         return results
@@ -89,4 +91,22 @@ def right_avg_convolve(arr: np.ndarray, win_size: int):
     result = np.empty_like(arr)
     for i in range(len(arr)):
         result[i] = arr[i: i + win_size + 1].mean()
+    return result
+
+
+def right_avg_weighted_convolve(arr: np.ndarray, win_size: int):
+    result = np.empty_like(arr)
+    for i in range(len(arr)):
+        window = arr[i: i + win_size + 1]
+        weights = np.ones_like(window) / np.arange(1, len(window) + 1)
+        result[i] = (window * weights).mean()
+    return result
+
+def diff_right_window(arr: np.ndarray, win_size: int):
+    result = np.empty_like(arr)
+    for i in range(len(arr)):
+        window = arr[i: i + win_size + 1]
+        diff = window - arr[i]
+        weights = np.ones_like(window) / np.arange(1, len(window) + 1)
+        result[i] = (diff * weights).mean()
     return result

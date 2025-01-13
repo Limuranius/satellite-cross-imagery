@@ -23,8 +23,8 @@ class Info(ABC):
     filename: str
 
     def contains_pos(self, lon: float, lat: float) -> bool:
-        if lon < 0:
-            lon = 360 + lon
+        # if lon < 0:
+        #     lon = 360 + lon
         corners = [self.p1, self.p2, self.p3, self.p4]
         corners = utils.fix_antimeridian(corners)
         return geopoint_inside_polygon(

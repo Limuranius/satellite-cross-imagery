@@ -1,1 +1,6 @@
-from . import manually_draw_edges, fix_channel_8, fix_channel_12
+from . import (
+    manually_draw_edges,
+    fix_channel_8,
+    fix_channel_12,
+    fix_zebra,
+)

@@ -39,7 +39,7 @@ DTS = [
     # datetime.fromisoformat("2024-05-02 17:00:00"),
     # datetime.fromisoformat("2024-05-12 17:15:00"),  # maybe 12
     # datetime.fromisoformat("2024-05-15 06:10:00"),
-    # datetime.fromisoformat("2024-06-06 19:35:00"),  # GOAT
+    datetime.fromisoformat("2024-06-06 19:35:00"),  # GOAT
     datetime.fromisoformat("2024-10-01 20:00:00"),  # CHANNEL 12 GOAT
 ]
 for dt in DTS:

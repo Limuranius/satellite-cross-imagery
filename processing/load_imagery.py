@@ -1,7 +1,9 @@
 from datetime import timedelta, datetime
 
+import custom_types
 from .MERSIImage import MERSIImage
 from .MODISImage import MODISImage
+from .MatchingImageryPair import MatchingImageryPair
 from .preprocessing import group_by_time, filter_by_datetime, group_mersi_files, get_mersi_file_dt, get_modis_file_dt, \
     group_modis_files
 from typing import Generator
@@ -14,33 +16,34 @@ def iterate_close_images(
         interval: tuple[datetime, datetime] = None,
         indices: list[int] = None,
 ) -> Generator[tuple[MERSIImage, MODISImage], None, None]:
-    groups = group_by_time(max_timedelta)
-    if indices:
-        groups = [groups[i] for i in range(len(groups)) if i in indices]
-    if interval:
-        groups = filter_by_datetime(groups, *interval)
-    for (MERSI_L1_PATH, MERSI_L1_GEO_PATH), (MODIS_L1_PATH, MODIS_L1_GEO_PATH, MODIS_CLOUD_MASK_PATH) in groups:
-        img_mersi = MERSIImage(
-            MERSI_L1_PATH,
-            MERSI_L1_GEO_PATH,
-            mersi_band,
-        )
-
-        img_modis = MODISImage(
-            MODIS_L1_PATH,
-            MODIS_L1_GEO_PATH,
-            modis_band,
-        )
-        img_modis.load_cloud_mask(MODIS_CLOUD_MASK_PATH)
-
-        yield img_mersi, img_modis
+    raise Exception("Does not work, gives wrong results")
+    # groups = group_by_time(max_timedelta)
+    # if indices:
+    #     groups = [groups[i] for i in range(len(groups)) if i in indices]
+    # if interval:
+    #     groups = filter_by_datetime(groups, *interval)
+    # for (MERSI_L1_PATH, MERSI_L1_GEO_PATH), (MODIS_L1_PATH, MODIS_L1_GEO_PATH, MODIS_CLOUD_MASK_PATH) in groups:
+    #     img_mersi = MERSIImage(
+    #         MERSI_L1_PATH,
+    #         MERSI_L1_GEO_PATH,
+    #         mersi_band,
+    #     )
+    #
+    #     img_modis = MODISImage(
+    #         MODIS_L1_PATH,
+    #         MODIS_L1_GEO_PATH,
+    #         modis_band,
+    #     )
+    #     img_modis.load_cloud_mask(MODIS_CLOUD_MASK_PATH)
+    #
+    #     yield img_mersi, img_modis
 
 
 def iterate_image_groups(
-        groups,
+        groups: list[custom_types.ImageryGroupPaths],
         mersi_band: str,
         modis_band: str,
-) -> Generator[tuple[MERSIImage, MODISImage], None, None]:
+) -> Generator[MatchingImageryPair, None, None]:
     for (MERSI_L1_PATH, MERSI_L1_GEO_PATH), (MODIS_L1_PATH, MODIS_L1_GEO_PATH, MODIS_CLOUD_MASK_PATH) in groups:
         img_mersi = MERSIImage(
             MERSI_L1_PATH,
@@ -55,7 +58,7 @@ def iterate_image_groups(
         )
         img_modis.load_cloud_mask(MODIS_CLOUD_MASK_PATH)
 
-        yield img_mersi, img_modis
+        yield MatchingImageryPair(img_mersi, img_modis)
 
 def iterate_mersi(
         band: str,

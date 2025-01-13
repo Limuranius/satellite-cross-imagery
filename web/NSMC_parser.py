@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+import re
 from enum import Enum, auto
 from io import BytesIO
 
@@ -101,7 +102,7 @@ def request_dts_infos(dts: list[datetime.datetime]) -> list[tuple[datetime.datet
     responses = []
     timeout_count = 0
     for i, resp in tqdm(
-            grequests.imap_enumerated(rs, size=500),
+            grequests.imap_enumerated(rs, size=1000),
             total=len(rs),
             desc="Requesting imagery info from NSMC website"
     ):
@@ -124,12 +125,19 @@ def __parse_response_text(text: str) -> dict:
     return json.loads(text)
 
 
-# dts = [
-#     datetime.datetime(2024, 9, 4, 14, 10),
-#     datetime.datetime(2024, 9, 4, 14, 5),
-#     datetime.datetime(2024, 9, 4, 14, 0),
-# ]
-#
-# for dt in dts:
-#     select_dt(dt, DataType.L1)
-#     select_dt(dt, DataType.L1_GEO)
+def orders_list() -> dict:
+    r = session.post(
+        url="https://satellite.nsmc.org.cn/PortalSite/Ord/MyOrders.aspx/GetDisplayOrder",
+        headers={
+            "Content-Type": "application/json;charset=utf-8",
+        },
+    )
+    s = r.json()["d"]
+    s = re.sub('(\w+):', '"\g<1>":', s)
+    s = s.replace("'", '"')
+    print(s)
+    print(s[30: 45])
+    return json.loads(s)
+
+# res = orders_list()
+# print(res)

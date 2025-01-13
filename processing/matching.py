@@ -13,10 +13,6 @@ from processing.MERSIImage import MERSIImage
 from processing.MODISImage import MODISImage
 from processing.std_map import load_rstd_map
 
-# used in rstd filtering
-KERNEL_SIZE = 5
-RSTD_THRESHOLD = 0.02
-
 
 def get_matching_pixels(
         image_mersi: MERSIImage,
@@ -234,6 +230,7 @@ def aggregated_matching_stats(
         image_mersi: MERSIImage,
         image_modis: MODISImage,
         pixels: list[tuple[int, int], tuple[int, int]],
+        kernel_size: int,
 ) -> pd.DataFrame:
     mersi_pixels = np.array([pixel[0] for pixel in pixels]).transpose(1, 0)
     modis_pixels = np.array([pixel[1] for pixel in pixels]).transpose(1, 0)
@@ -254,8 +251,8 @@ def aggregated_matching_stats(
             mersi_i, mersi_j = mersi_pixel
 
             indices_window = indices[
-                             mersi_i - KERNEL_SIZE // 2: mersi_i + KERNEL_SIZE // 2 + 1,
-                             mersi_j - KERNEL_SIZE // 2: mersi_j + KERNEL_SIZE // 2 + 1
+                             mersi_i - kernel_size // 2: mersi_i + kernel_size // 2 + 1,
+                             mersi_j - kernel_size // 2: mersi_j + kernel_size // 2 + 1
                              ]
 
             window_pixel_indices = indices_window[indices_window != -1]
@@ -292,7 +289,7 @@ def aggregated_matching_stats(
 def load_matching_pixels(
         image_mersi: MERSIImage,
         image_modis: MODISImage,
-
+        *,
         max_zenith_relative_diff: float,
         max_zenith: int,
         exclude_clouds: bool,
@@ -301,10 +298,9 @@ def load_matching_pixels(
         do_erosion: bool,
         correct_cloud_movement: bool,
         use_rstd_filtering: bool,
-        rstd_kernel_size: int = KERNEL_SIZE,
-        rstd_threshold: float = RSTD_THRESHOLD,
-
-        exclude_overflow: bool = True,
+        rstd_kernel_size: int,
+        rstd_threshold: float,
+        exclude_overflow: bool,
 
         force_recalculate=False,
 ) -> list[tuple[int, int], tuple[int, int]]:
