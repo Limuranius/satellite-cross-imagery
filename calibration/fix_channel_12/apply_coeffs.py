@@ -24,7 +24,7 @@ def apply_coeffs(image: np.ndarray, coeffs: np.ndarray):
     """
     height = image.shape[0]
     new_image = image.copy()
-    pbar = tqdm.tqdm(desc="Calibrating band 12 image", total=2000, unit="rows")
+    # pbar = tqdm.tqdm(desc="Calibrating band 12 image", total=2000, unit="rows")
     for sensor in range(10):
         win_size, a, b = coeffs[sensor]
         win_size = int(win_size)
@@ -36,8 +36,8 @@ def apply_coeffs(image: np.ndarray, coeffs: np.ndarray):
             diff[diff < 0] = 0
             predicted_noise = a * diff + b * diff ** 2
             new_image[y] -= predicted_noise.astype(int)
-            pbar.update(1)
-    pbar.close()
+            # pbar.update(1)
+    # pbar.close()
     return new_image
 
 

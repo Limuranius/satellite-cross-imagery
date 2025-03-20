@@ -32,15 +32,15 @@ def apply_coeffs(image: np.ndarray, coeffs: np.ndarray):
     """
     height = image.shape[0]
     new_image = image.copy()
-    pbar = tqdm.tqdm(desc="Calibrating zebra", total=2000, unit="rows")
+    # pbar = tqdm.tqdm(desc="Calibrating zebra", total=2000, unit="rows")
     for sensor in range(10):
         slope, intercept = coeffs[sensor]
         for y in range(sensor, height, 10):
             row = image[y]
             predicted_noise = row * slope + intercept
             new_image[y] -= predicted_noise.astype(int)
-            pbar.update(1)
-    pbar.close()
+            # pbar.update(1)
+    # pbar.close()
     return new_image
 
 

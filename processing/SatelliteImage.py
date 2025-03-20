@@ -1,12 +1,13 @@
 from abc import ABC
 from datetime import datetime
 
+import folium
 import numpy as np
-
-from custom_types import LonLat
-from utils import geopoint_inside_polygon
-
 from scipy.spatial import KDTree
+
+import utils
+from custom_types import LonLat
+
 
 class SatelliteImage(ABC):
     file_path: str
@@ -41,13 +42,20 @@ class SatelliteImage(ABC):
         return tl, tr, br, bl
 
     def get_closest_pixel(self, lon: float, lat: float) -> tuple[int, int]:
-        distance, index = self.geo_kdtree.query((lon, lat))
-        i, j = np.unravel_index(index, self.latitude.shape)
+        coords = np.stack([self.longitude, self.latitude]).transpose((1, 2, 0))
+        dist = np.linalg.norm(coords - [lon, lat], axis=2)
+        i, j = np.unravel_index(dist.argmin(), self.latitude.shape)
         return i, j
 
     def contains_pos(self, lon: float, lat: float) -> bool:
         corners = self.get_corners_coords()
-        return geopoint_inside_polygon(
+        return utils.geopoint_inside_polygon(
             (lon, lat),
             corners
         )
+
+    def show_on_map(self, map_obj: folium.Map):
+        corners = self.get_corners_coords()
+        folium.Polygon(
+            utils.reverse_coords(utils.fix_antimeridian(corners)),
+        ).add_to(map_obj)

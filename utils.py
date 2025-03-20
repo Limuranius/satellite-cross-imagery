@@ -56,3 +56,6 @@ def datetime_range(start: datetime, end: datetime, step: timedelta = timedelta(m
     while curr <= end:
         yield curr
         curr += step
+
+
+F0 = dict((int(float(line.split()[0])), float(line.split()[1])) for line in open(r"C:\Users\Gleb\PycharmProjects\satellite-cross-imagery\Thuillier2003.txt").read().strip().split("\n"))

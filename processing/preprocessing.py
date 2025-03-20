@@ -2,10 +2,7 @@ import os
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-from pyhdf.SD import SD
-
 import paths
-from .MODISImage import extract_datetime
 
 
 def get_modis_file_dt(file_path: str) -> datetime:
@@ -145,3 +142,12 @@ def filter_by_datetime(groups, start: datetime, end: datetime):
         if start <= group_dt <= end:
             new_groups.append(group)
     return new_groups
+
+
+def get_mersi_dates() -> list[datetime]:
+    files = [os.path.join(paths.MERSI_L1_DIR, f) for f in os.listdir(paths.MERSI_L1_DIR)]
+    dates = []
+    for file_path in files:
+        dt = get_mersi_file_dt(file_path)
+        dates.append(dt)
+    return dates

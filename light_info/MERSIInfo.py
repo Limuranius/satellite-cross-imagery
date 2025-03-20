@@ -1,15 +1,9 @@
 from __future__ import annotations
 
 import datetime
-import json
 from dataclasses import dataclass
-from io import BytesIO
 
-import grequests
 import numpy as np
-import requests
-from PIL import Image
-from tqdm import tqdm
 
 import web.NSMC_parser
 from custom_types import LonLat
