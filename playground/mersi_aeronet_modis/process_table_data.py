@@ -35,7 +35,7 @@ def atmosphere_correction(
         view_zenith: float,  # degrees
         view_azimuth: float,  # degrees
         aot550: float,
-) -> float:
+) -> tuple[float, float]:
     s = SixS()
     s.wavelength = Wavelength(
         start_wavelength=start_wavelength,
@@ -59,8 +59,9 @@ def atmosphere_correction(
     s.run()
     output = s.outputs
     reflectance_corrected = output.atmos_corrected_reflectance_brdf
+    radiance_corrected = radiance - output.atmospheric_intrinsic_radiance
 
-    return reflectance_corrected
+    return reflectance_corrected, radiance_corrected
 
 
 def process_image(
@@ -106,7 +107,7 @@ def process_image(
             aot550 = row["aeronet_Aerosol_Optical_Depth[555nm]"]
         if aot550 != aot550:
             aot550 = row["aeronet_Aerosol_Optical_Depth[560nm]"]
-        reflectance_corrected = atmosphere_correction(
+        reflectance_corrected, radiance_corrected = atmosphere_correction(
             radiance=radiance.mean(),
             start_wavelength=min_wl / 1000,
             end_wavelength=max_wl / 1000,
@@ -118,20 +119,6 @@ def process_image(
             view_azimuth=image.sensor_azimuth[site_i, site_j] / 100,
             aot550=aot550
         )
-        if image.dt.isoformat() == "2019-01-14T11:25:00" and image.wavelength == 443:
-            print(dict(
-                radiance=radiance.mean(),
-                start_wavelength=min_wl / 1000,
-                end_wavelength=max_wl / 1000,
-                srf=srf_grid[:, 1],
-                pixel_lat=image.latitude[site_i, site_j],
-                pixel_lon=image.longitude[site_i, site_j],
-                dt=image.dt,
-                view_zenith=image.sensor_zenith[site_i, site_j] / 100,
-                view_azimuth=image.sensor_azimuth[site_i, site_j] / 100,
-                aot550=aot550
-            ))
-            print(reflectance_corrected)
 
         wl = image.wavelength
         df.loc[i, f"mersi_n_good_pixels"] = good_pixels_mask.sum()
@@ -148,7 +135,7 @@ def process_image(
         # df.loc[i, f"mersi_reflectance_std[{wl}nm]"] = reflectance.std()
         # df.loc[i, f"mersi_apparent_reflectance[{wl}nm]"] = apparent_reflectance.mean()
         # df.loc[i, f"mersi_apparent_reflectance_std[{wl}nm]"] = apparent_reflectance.std()
-        # df.loc[i, f"mersi_6S_radiance[{wl}nm]"] = radiance_corrected
+        df.loc[i, f"mersi_6S_radiance[{wl}nm]"] = radiance_corrected
         # df.loc[i, f"mersi_6S_radiance_std[{wl}nm]"] = radiance_corrected.std()
         df.loc[i, f"mersi_6S_reflectance[{wl}nm]"] = reflectance_corrected
         # df.loc[i, f"mersi_6S_reflectance_std[{wl}nm]"] = reflectance_corrected.std()
@@ -177,12 +164,12 @@ def iterate_rows_timedelta_within_image(image: MERSIImage):
 
 BANDS = [
     "8", "9", "10", "11",
-    # "12", "13", "14", "15"
+    "12", "13", "14", "15"
 ]
-# BANDS = ["8"]
 df = pd.read_csv("data.csv", sep="\t")
 df["modis_t"] = pd.to_datetime(df["modis_t"], format="mixed")
 df["aeronet_t"] = pd.to_datetime(df["aeronet_t"])
+df = df[df["modis_zenith"].notna()]
 if __name__ == '__main__':
     mersi_dts = get_mersi_dates()
     for mersi_dt in tqdm.tqdm(mersi_dts):

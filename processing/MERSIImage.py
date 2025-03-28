@@ -191,9 +191,9 @@ class MERSIImage(SatelliteImage):
         self.counts[self.counts == 65535] = 0
 
         self.vis_cal = self.hdf["Calibration"]["VIS_Cal_Coeff"][:]
-        self.blackbody = self.hdf["Calibration"]["BB_DN_average"][band_index + 5]
-        self.space_view = self.hdf["Calibration"]["SV_DN_average"][band_index + 5]
-        self.voc = self.hdf["Calibration"]["VOC_DN_average"][band_index + 5]
+        self.blackbody = self.hdf["Calibration"]["BB_DN_average"][band_index + 4]
+        self.space_view = self.hdf["Calibration"]["SV_DN_average"][band_index + 4]
+        self.voc = self.hdf["Calibration"]["VOC_DN_average"][band_index + 4]
         self.D = self.hdf.attrs["EarthSun Distance Ratio"]
 
 
@@ -222,7 +222,7 @@ class MERSIImage(SatelliteImage):
     @property
     def reflectance(self):
         band_index = MERSI_2_BANDS.index(self.band)
-        Cal_0, Cal_1, Cal_2 = self.vis_cal[band_index]
+        Cal_0, Cal_1, Cal_2 = self.vis_cal[band_index + 4]
         Slope = 1
         Intercept = 0
         dn = self.counts * Slope + Intercept
@@ -231,7 +231,7 @@ class MERSIImage(SatelliteImage):
 
     def reflectance_slice(self, idx_2d):
         band_index = MERSI_2_BANDS.index(self.band)
-        Cal_0, Cal_1, Cal_2 = self.vis_cal[band_index]
+        Cal_0, Cal_1, Cal_2 = self.vis_cal[band_index + 4]
         Slope = 1
         Intercept = 0
         dn = self.counts[*idx_2d] * Slope + Intercept

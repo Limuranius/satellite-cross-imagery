@@ -7,6 +7,7 @@ from pyhdf.SD import SD
 from paths import MODIS_L1B_DIR, MODIS_L1B_GEO_DIR
 from .SatelliteImage import SatelliteImage
 
+
 MODIS_BANDS = ["8", "9", "10", "11", "12", "13lo", "13hi", "14lo", "14hi", "15", "16", "17", "18", "19", "26"]
 BANDS_WAVELEN = {
     "8": 412,
