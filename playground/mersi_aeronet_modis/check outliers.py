@@ -36,38 +36,55 @@ def process_image(
             slice(max(0, site_i - radius), site_i + radius + 1),
             slice(max(0, site_j - radius), site_j + radius + 1),
         ]
+        big_area_idx = [
+            slice(max(0, site_i - 20), site_i + 20 + 1),
+            slice(max(0, site_j - 20), site_j + 20 + 1),
+        ]
 
-        good_pixels_mask = homogeneous_pixels_mask(image, area_idx)
-        if good_pixels_mask is None:
-            continue
+        band13 = image.get_band("13")
+        color = image.colored_image()
+        color_small = np.array(color[*area_idx])
+        color_big = color[*big_area_idx]
+        color_big[20, 20] = (255, 0, 0)
 
-        # # Посмотреть маску хороших пикселей
-        # _, ax = plt.subplots(ncols=2, figsize=(10, 20))
-        # # ax[0].imshow(image.counts[*area_idx])
-        # sns.heatmap(image.counts[*area_idx], center=0, annot=True, ax=ax[0])
-        # ax[1].imshow(good_pixels_mask.reshape((5, 5)))
+        reflectance13 = band13.reflectance[*area_idx]
+        mask = reflectance13 < 0.03
+        if mask.sum() == 0:  # Есть случаи, когда альбедо >3%, но вода всё равно однородная
+            mask = ~outliers_2d_mask(reflectance13)
+        else:
+            mask = ~outliers_2d_mask(reflectance13) & mask
+        pixels = reflectance13[mask]
+        if pixels.std() > 0.002:  # Не удалось убрать выбросы, всё убираем
+            mask = np.zeros_like(mask)
+        mask = mask & (reflectance13 < 0.1)  # Не брать однородные облака
+        pixels = reflectance13[mask]
+
+
+        _, ax = plt.subplots(ncols=3, nrows=2, figsize=(20, 8))
+        sns.heatmap(reflectance13, center=0, annot=True, ax=ax[0, 0], fmt=".3f")
+        ax[0, 1].imshow(color_small)
+        ax[0, 2].imshow(color_big)
+        ax[1, 0].imshow(mask)
+        ax[1, 1].boxplot(pixels)
+        ax[1, 2].text(0.1, 0.1, f"n={len(pixels)}\nstd={pixels.std():.6f}\nmean={pixels.mean():.3f}\nmedian={np.median(pixels):.3f}\ndt={image.dt}")
+        plt.tight_layout()
         # plt.show()
-
+        plt.savefig(f"cloud_masks/{i}.jpg", dpi=200)
+        plt.close()
 
 def homogeneous_pixels_mask(image: MERSIImage, area_idx):
     band13 = image.get_band("13")
-    area = band13.counts[*area_idx]
-    pixels = area.flatten()
-    good_pixels_mask = pixels <= 4096  # Убираем битые пиксели
-    # if pixels[good_pixels_mask].std() < 100:  # Изображение изначально было однородным
-    #     return good_pixels_mask
-    good_pixels_mask &= ~outliers_mask(pixels)  # Убираем выбросы
-
-    # Посмотреть маску хороших пикселей
-    _, ax = plt.subplots(ncols=3, figsize=(20, 10))
-    sns.heatmap(area, center=0, annot=True, ax=ax[0], fmt=".0f")
-    sns.heatmap(image.counts[*area_idx], center=0, annot=True, ax=ax[2], fmt=".0f")
-    ax[1].imshow(good_pixels_mask.reshape((5, 5)))
-    plt.show()
-
-    if pixels[good_pixels_mask].std() < 100:
-        return good_pixels_mask
-    return None  # Слишком зашумлено, невозможно убрать выбросы, потому что не понятно, что является выбросом
+    reflectance13 = band13.reflectance[*area_idx]
+    mask = reflectance13 < 0.03
+    if mask.sum() == 0:  # Есть случаи, когда альбедо >3%, но вода всё равно однородная
+        mask = ~outliers_2d_mask(reflectance13)
+    else:
+        mask = ~outliers_2d_mask(reflectance13) & mask
+    pixels = reflectance13[mask]
+    if pixels.std() > 0.002:
+        return None  # Слишком зашумлено, невозможно убрать выбросы, потому что не понятно, что является выбросом
+    mask = mask & (reflectance13 < 0.1)  # Не брать однородные облака
+    return mask
 
 
 def iterate_rows_timedelta_within_image(image: MERSIImage):
@@ -78,10 +95,6 @@ def iterate_rows_timedelta_within_image(image: MERSIImage):
             yield i, row
 
 
-# BANDS = [
-#     "8", "9", "10", "11",
-#     "12", "13", "14", "15"
-# ]
 BANDS = ["8"]
 df = pd.read_csv("data.csv", sep="\t")
 df["modis_t"] = pd.to_datetime(df["modis_t"], format="mixed")

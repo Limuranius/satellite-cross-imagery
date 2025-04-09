@@ -81,20 +81,13 @@ def process_image(
         if good_pixels_mask is None:
             continue
 
-        # Посмотреть маску хороших пикселей
-        # _, ax = plt.subplots(ncols=2)
-        # # ax[0].imshow(image.counts[*area_idx])
-        # sns.heatmap(image.counts[*area_idx], center=0, annot=True, ax=ax[0])
-        # ax[1].imshow(good_pixels_mask.reshape((5, 5)))
-        # plt.show()
-
-        # solz = np.radians(image.solar_zenith[*area_idx].flatten()[good_pixels_mask] / 100)
-        counts = image.counts[*area_idx].flatten()[good_pixels_mask]
-        # radiance = image.radiance[*area_idx].flatten()[good_pixels_mask]
-        radiance = image.radiance_slice(area_idx).flatten()[good_pixels_mask]
-        # reflectance = image.reflectance[*area_idx].flatten()[good_pixels_mask]
-        reflectance = image.reflectance_slice(area_idx).flatten()[good_pixels_mask]
-        # apparent_reflectance = image.apparent_reflectance[*area_idx].flatten()[good_pixels_mask]
+        # solz = np.radians(image.solar_zenith[*area_idx][good_pixels_mask] / 100)
+        counts = image.counts[*area_idx][good_pixels_mask]
+        # radiance = image.radiance[*area_idx][good_pixels_mask]
+        radiance = image.radiance_slice(area_idx)[good_pixels_mask]
+        # reflectance = image.reflectance[*area_idx][good_pixels_mask]
+        reflectance = image.reflectance_slice(area_idx)[good_pixels_mask]
+        # apparent_reflectance = image.apparent_reflectance[*area_idx][good_pixels_mask]
 
         # Atmospheric correction values
         srf = SRF.mersi_2_srf.get_band(int(image.band))
@@ -130,7 +123,7 @@ def process_image(
         df.loc[i, f"mersi_counts[{wl}nm]"] = counts.mean()
         df.loc[i, f"mersi_counts_std[{wl}nm]"] = counts.std()
         df.loc[i, f"mersi_radiance[{wl}nm]"] = radiance.mean()
-        # df.loc[i, f"mersi_radiance_std[{wl}nm]"] = radiance.std()
+        df.loc[i, f"mersi_radiance_std[{wl}nm]"] = radiance.std()
         df.loc[i, f"mersi_reflectance[{wl}nm]"] = reflectance.mean()
         # df.loc[i, f"mersi_reflectance_std[{wl}nm]"] = reflectance.std()
         # df.loc[i, f"mersi_apparent_reflectance[{wl}nm]"] = apparent_reflectance.mean()
@@ -143,16 +136,17 @@ def process_image(
 
 def homogeneous_pixels_mask(image: MERSIImage, area_idx):
     band13 = image.get_band("13")
-    area = band13.counts[*area_idx]
-    pixels = area.flatten()
-    good_pixels_mask = pixels <= 4096  # Убираем битые пиксели
-    if pixels[good_pixels_mask].std() < 100:  # Изображение изначально было однородным
-        return good_pixels_mask
-    good_pixels_mask &= ~outliers_mask(pixels)  # Убираем выбросы
-    if pixels[good_pixels_mask].std() < 100:
-        return good_pixels_mask
-    return None  # Слишком зашумлено, невозможно убрать выбросы, потому что не понятно, что является выбросом
-
+    reflectance13 = band13.reflectance[*area_idx]
+    mask = reflectance13 < 0.03
+    if mask.sum() == 0:  # Есть случаи, когда альбедо >3%, но вода всё равно однородная
+        mask = ~outliers_2d_mask(reflectance13)
+    else:
+        mask = ~outliers_2d_mask(reflectance13) & mask
+    pixels = reflectance13[mask]
+    if pixels.std() > 0.002:
+        return None  # Слишком зашумлено, невозможно убрать выбросы, потому что не понятно, что является выбросом
+    mask = mask & (reflectance13 < 0.1)  # Не брать однородные облака
+    return mask
 
 def iterate_rows_timedelta_within_image(image: MERSIImage):
     timedelta = (df["aeronet_t"] - image.dt).abs()

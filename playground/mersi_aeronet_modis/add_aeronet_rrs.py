@@ -2,7 +2,7 @@ import pandas as pd
 
 from utils import F0
 
-df = pd.read_csv("data_with_mersi.csv", sep="\t")
+df = pd.read_csv("data.csv", sep="\t")
 df["modis_t"] = pd.to_datetime(df["modis_t"], format="mixed")
 df["aeronet_t"] = pd.to_datetime(df["aeronet_t"])
 
@@ -14,4 +14,4 @@ for col in lwnfq_cols:
     rrs = df[col] / F0[wv] * 100
     df[f"aeronet_Rrs[{wv}nm]"] = rrs
 
-df.to_csv("data_with_mersi.csv", sep="\t", index=False)
+df.to_csv("data.csv", sep="\t", index=False)

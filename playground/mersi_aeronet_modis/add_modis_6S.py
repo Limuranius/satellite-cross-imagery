@@ -2,7 +2,6 @@ import pandas as pd
 import tqdm
 from Py6S import *
 import datetime
-import SRF.modis_aqua_srf
 
 
 WL_TO_BAND = {
