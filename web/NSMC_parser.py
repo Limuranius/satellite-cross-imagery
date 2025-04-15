@@ -1,8 +1,5 @@
 import datetime
-import json
-import os
-import re
-from enum import Enum, auto
+import enum
 from io import BytesIO
 
 import grequests
@@ -12,17 +9,29 @@ from PIL import Image
 from tqdm import tqdm
 
 import paths
-from web.utils import download_file
+
+cookie = None
 
 
-class DataType(Enum):
-    L1 = auto()
-    L1_GEO = auto()
+def require_cookie(func):
+    def wrapped(*args, **kwargs):
+        global cookie
+        if cookie is None:
+            cookie = input("Enter cookies from https://satellite.nsmc.org.cn: ")
+        return func(*args, **kwargs)
+
+    return wrapped
+
+
+class DataType(enum.Enum):
+    L1 = enum.auto()
+    L1_GEO = enum.auto()
+    CLOUD_MASK = enum.auto()
 
     def suffix(self) -> str:
         return {
             DataType.L1: "1000M",
-            DataType.L1_GEO: "GEO1K"
+            DataType.L1_GEO: "GEO1K",
         }[self]
 
     def output_dir(self) -> str:
@@ -31,73 +40,48 @@ class DataType(Enum):
             DataType.L1_GEO: paths.MERSI_L1_GEO_DIR,
         }[self]
 
+    def get_filename(self, dt: datetime.datetime) -> str:
+        if self in [DataType.L1, DataType.L1_GEO]:
+            filename_fmt = f"FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_{self.suffix()}_MS.HDF"
+        elif self == DataType.CLOUD_MASK:
+            filename_fmt = "FY3D_MERSI_ORBT_L2_CLM_MLT_NUL_%Y%m%d_%H%M_1000M_MS.HDF"
+        return dt.strftime(filename_fmt)
 
-session = requests.Session()
-cookies_str = input("Enter cookies from https://satellite.nsmc.org.cn: ")
-for pair in cookies_str.split("; "):
-    key, value = pair.split("=", maxsplit=1)
-    session.cookies.set(key, value)
+    def get_production_code(self) -> str:
+        return {
+            DataType.L1: "FY3D_MERSI_GBAL_L1_YYYYMMDD_HHmm_1000M_MS.HDF",
+            DataType.L1_GEO: "FY3D_MERSI_GBAL_L1_YYYYMMDD_HHmm_GEO1K_MS.HDF",
+        }[self]
 
 
-def select_dt(
+def get_metadata(
         dt: datetime.datetime,
         data_type: DataType,
-) -> None:
-    headers = {
-        "Content-Type": "application/json;charset=utf-8",
-    }
-
-    filename_fmt = f"FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_{data_type.suffix()}_MS.HDF"
-    post_data = {
-        "filename": dt.strftime(filename_fmt),
-        "ischecked": True,
-        "satellitecode": "FY3D",
-        "datalevel": "L1"
-    }
-
-    session.post(
-        "https://satellite.nsmc.org.cn/PortalSite/WebServ/CommonService.asmx/selectOne",
-        headers=headers,
-        data=json.dumps(post_data)
-    )
+) -> dict:
+    resp = requests.post(
+        "https://data.nsmc.org.cn/DataPortal/v1/data/selection/product/file/metadata",
+        data={
+            "fileName": data_type.get_filename(dt),
+            "productionCode": data_type.get_production_code(),
+        }
+    ).json()["resource"]
+    resp["DATASIZE"] /= 1024 * 1024  # Переводим в MB
+    return resp
 
 
-def download_dt(
-        dt: datetime.datetime,
-        data_type: DataType,
-) -> None:
-    filename_fmt = f"FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_{data_type.suffix()}_MS.HDF"
-    filename = dt.strftime(filename_fmt)
-    url = f"https://satellite.nsmc.org.cn/PortalSite/Data/RealDataDownload.aspx?fileName={filename}"
-
-    download_file(
-        url,
-        output_path=os.path.join(data_type.output_dir(), filename),
-        session=session
-    )
-
-
-def get_preview(dt: datetime.datetime) -> np.ndarray:
-    url_fmt = "https://img.nsmc.org.cn/IMG_LIB/FY3D/FY3D_MERSI_GBAL_L1_YYYYMMDD_HHmm_1000M_MS.HDF/%Y%m%d/FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF.jpg"
-    image_url = dt.strftime(url_fmt)
-    img_resp = requests.get(image_url)
-    img = Image.open(BytesIO(img_resp.content))
-    return np.array(img)
-
-
-def request_dts_infos(dts: list[datetime.datetime]) -> list[tuple[datetime.datetime, dict]]:
+def get_many_metadatas(
+        dts: list[datetime.datetime],
+        data_type: DataType = DataType.L1,
+) -> list[tuple[datetime.datetime, dict]]:
     rs = []
     for dt in dts:
-        str_data = dt.strftime(
-            "{i:'-1',iteminfo:'^-1!FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF!FY3D!L1!img!1!s9000.dmz.nsmc.org.cn!IMG_LIB/FY3D/FY3D_MERSI_GBAL_L1_YYYYMMDD_HHmm_1000M_MS.HDF/%Y%m%d/FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF.jpg'}"
-        )
         rs.append(grequests.post(
-            url="https://satellite.nsmc.org.cn/PortalSite/WebServ/ProductService.asmx/ShowInfo",
-            data=str_data,
-            headers={
-                "Content-Type": "application/json;charset=utf-8",
+            url="https://data.nsmc.org.cn/DataPortal/v1/data/selection/product/file/metadata",
+            data={
+                "fileName": data_type.get_filename(dt),
+                "productionCode": data_type.get_production_code(),
             },
-            timeout=5,
+            # timeout=5,
         ))
     responses = []
     timeout_count = 0
@@ -111,33 +95,83 @@ def request_dts_infos(dts: list[datetime.datetime]) -> list[tuple[datetime.datet
             continue
         responses.append((
             dts[i],
-            __parse_response_text(resp.text)
+            resp.json()
         ))
     print("Timeouts:", timeout_count)
     return responses
 
 
-def __parse_response_text(text: str) -> dict:
-    text = text.replace("\\r\\n    \\", "")
-    text = text[13:-7]
-    text = text.replace("\\r\\n", "")
-    text = text.replace("\\", "")
-    return json.loads(text)
-
-
-def orders_list() -> dict:
-    r = session.post(
-        url="https://satellite.nsmc.org.cn/PortalSite/Ord/MyOrders.aspx/GetDisplayOrder",
-        headers={
-            "Content-Type": "application/json;charset=utf-8",
-        },
+@require_cookie
+def select_dts(
+        dts: list[datetime.datetime],
+        data_type: DataType,
+) -> None:
+    file_names = [data_type.get_filename(dt) for dt in dts]
+    r = requests.post(
+        "https://data.nsmc.org.cn/DataPortal/v1/data/cart/subbatch?from=portalEn",
+        json=file_names,
+        headers={"Cookie": cookie}
     )
-    s = r.json()["d"]
-    s = re.sub('(\w+):', '"\g<1>":', s)
-    s = s.replace("'", '"')
-    print(s)
-    print(s[30: 45])
-    return json.loads(s)
 
-# res = orders_list()
-# print(res)
+
+def select_dt(
+        dt: datetime.datetime,
+        data_type: DataType,
+) -> None:
+    select_dts([dt], data_type)
+
+
+@require_cookie
+def get_order_size():
+    """
+    sizeOfShop - size of current order (in MB)
+    sizeOfOrd - size of previously ordered (in MB)
+    sizeOfOrdAndShop - size of current order + previously ordered (in MB)
+    maxfiledownloadcount - daily volume limit (in MB)
+    """
+    resp = requests.get(
+        "https://data.nsmc.org.cn/DataPortal/v1/data/cart/subsize",
+        headers={"Cookie": cookie}
+    ).json()["resource"]
+    resp["sizeOfShop"] /= 1024 * 1024
+    resp["sizeOfOrd"] /= 1024 * 1024
+    resp["sizeOfOrdAndShop"] /= 1024 * 1024
+    return resp
+
+
+def get_preview(dt: datetime.datetime) -> np.ndarray:
+    url_fmt = "https://img.nsmc.org.cn/IMG_LIB/FY3D/FY3D_MERSI_GBAL_L1_YYYYMMDD_HHmm_1000M_MS.HDF/%Y%m%d/FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF.jpg"
+    image_url = dt.strftime(url_fmt)
+    img_resp = requests.get(image_url)
+    img = Image.open(BytesIO(img_resp.content))
+    return np.array(img)
+
+
+@require_cookie
+def get_orders_list():
+    return requests.get(
+        "https://satellite.nsmc.org.cn/DataPortal/v1/data/order/suborder",
+        headers={"Cookie": cookie}
+    ).json()["resource"]
+
+
+@require_cookie
+def get_order_info(order_code: str):
+    return requests.get(
+        f"https://satellite.nsmc.org.cn/DataPortal/v1/data/order/{order_code}/url",
+        headers={"Cookie": cookie},
+    ).json()["resource"]
+
+
+ord_list = get_orders_list()
+for ord in ord_list:
+    ord_code = ord["ordercode"]
+    ord_info = get_order_info(ord_code)
+    if "FTPACCOUNT" in ord_info:
+        name = ord_info["FTPACCOUNT"]
+        password = ord_info["FTPPASSWORD"]
+        print(f"ftp://{name}:{password}@ftp.nsmc.org.cn")
+
+# print(get_order_info("A202504130811037011"))
+
+

@@ -60,7 +60,7 @@ class MERSIInfo(Info):
 
     @staticmethod
     def request_dts(dts: list[datetime.datetime]) -> list[MERSIInfo | datetime.datetime]:
-        responses = web.NSMC_parser.request_dts_infos(dts)
+        responses = web.NSMC_parser.get_many_metadatas(dts)
         result = []
         for dt, data in responses:
             if int(data["datasize"]) == 0:

@@ -1,4 +1,4 @@
-from web.utils import parse_ftp_url, download_ftp
+from web.web_utils import parse_ftp_url, download_ftp
 import paths
 import os
 import shutil

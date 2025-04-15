@@ -1,25 +1,26 @@
 import os
-from os.path import join
+import pathlib
 
-DIR_PATH = os.path.dirname(__file__)
+DIR_PATH = pathlib.Path(__file__).parent
 
-IMAGERY_DIR = join(DIR_PATH, "imagery")
 
-MODIS_DIR = join(IMAGERY_DIR, "MODIS")
-MODIS_L1B_DIR = join(MODIS_DIR, "L1B")
-MODIS_L1B_GEO_DIR = join(MODIS_DIR, "L1B GEO")
-MODIS_CLOUD_MASK_DIR = join(MODIS_DIR, "Cloud Mask")
+IMAGERY_DIR = DIR_PATH / "imagery"
 
-MERSI_DIR = join(IMAGERY_DIR, "MERSI-2")
-MERSI_L1_DIR = join(MERSI_DIR, "L1")
-MERSI_L1_GEO_DIR = join(MERSI_DIR, "L1 GEO")
+MODIS_DIR = IMAGERY_DIR / "MODIS"
+MODIS_L1B_DIR = MODIS_DIR / "L1B"
+MODIS_L1B_GEO_DIR = MODIS_DIR / "L1B GEO"
+MODIS_CLOUD_MASK_DIR = MODIS_DIR / "Cloud Mask"
 
-MATCHING_PIXELS_DIR = join(IMAGERY_DIR, "matching pixels")
-RSTD_MAPS_DIR = join(IMAGERY_DIR, "relative std maps")
+MERSI_DIR = IMAGERY_DIR / "MERSI-2"
+MERSI_L1_DIR = MERSI_DIR / "L1"
+MERSI_L1_GEO_DIR = MERSI_DIR / "L1 GEO"
 
-CALIBRATION_DIR = join(DIR_PATH, "calibration")
-EDGE_MASKS_DIR = join(CALIBRATION_DIR, "edge masks")
-COEFFS_DIR = join(CALIBRATION_DIR, "coefficients")
+MATCHING_PIXELS_DIR = IMAGERY_DIR / "matching pixels"
+RSTD_MAPS_DIR = IMAGERY_DIR / "relative std maps"
+
+CALIBRATION_DIR = DIR_PATH / "calibration"
+EDGE_MASKS_DIR = CALIBRATION_DIR / "edge masks"
+COEFFS_DIR = CALIBRATION_DIR / "coefficients"
 
 for dir_path in [
     MODIS_L1B_DIR,

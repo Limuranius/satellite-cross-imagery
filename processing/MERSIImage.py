@@ -1,4 +1,5 @@
 import os.path
+import pathlib
 from datetime import datetime
 from math import pi
 
@@ -6,6 +7,7 @@ import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 
+import paths
 from paths import MERSI_L1_DIR, MERSI_L1_GEO_DIR
 from .SatelliteImage import SatelliteImage
 from .preprocessing import get_mersi_dates
@@ -262,3 +264,12 @@ class MERSIImage(SatelliteImage):
         for dt in get_mersi_dates():
             if start <= dt <= end:
                 yield MERSIImage.from_dt(dt, band)
+
+    @classmethod
+    def all_dts(cls) -> list[datetime]:
+        fmt = "FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS"
+        dts = []
+        for path in paths.MERSI_L1_DIR.glob("*"):
+            filename = path.stem
+            dts.append(datetime.strptime(filename, fmt))
+        return dts

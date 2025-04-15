@@ -75,12 +75,12 @@ def find_similar_images(
 
 
 def find_info_timedelta(
-        infos: list[Info],  # Отсортирован по Info.dt
+        infos: list[Info],
         t: datetime.datetime,
         max_delta: datetime.timedelta,
 ) -> list[Info]:
-    """Находит все info, которые по времени различаются с t максимум на max_delta
-    infos должен быть остсортирован по возрастанию Info.dt"""
+    """Находит все info, которые по времени различаются с t максимум на max_delta"""
+    infos = sorted(infos, key=lambda info: info.dt)
     i = bisect.bisect_left(infos, t, key=lambda info: info.dt)
     res = []
     left_i = i
@@ -103,12 +103,7 @@ def find_info_timedelta_containing_point(
     infos = find_info_timedelta(infos, t, max_delta)
     for info in infos:
         if info.contains_pos(*pos):
-            # print("COOL")
             return info
-    # map_obj = visuals.map_2d.show_image_boxes(infos)
-    # folium.Marker(pos[::-1]).add_to(map_obj)
-    # map_obj.show_in_browser()
-
     return None
 
 

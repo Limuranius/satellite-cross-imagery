@@ -4,7 +4,7 @@ import requests
 
 import paths
 from light_info.MODISInfo import MODISInfo
-from web.utils import download_file
+from web.web_utils import download_file
 
 session = requests.Session()
 cookies_str = input("Enter cookies from https://ladsweb.modaps.eosdis.nasa.gov/archive/allData/61/MYD021KM: ")

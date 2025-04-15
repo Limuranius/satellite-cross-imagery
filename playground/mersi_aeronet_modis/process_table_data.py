@@ -6,6 +6,7 @@ import tqdm
 from Py6S import *
 
 import SRF.mersi_2_srf
+import calibration
 from processing.MERSIImage import MERSIImage
 from processing.preprocessing import get_mersi_dates
 
@@ -66,6 +67,7 @@ def atmosphere_correction(
 
 def process_image(
         image: MERSIImage,
+        suffix: str = "",
 ):
     for i, row in iterate_rows_timedelta_within_image(image):
         site_i, site_j = image.get_closest_pixel(row["aeronet_lon"], row["aeronet_lat"])
@@ -120,18 +122,18 @@ def process_image(
         df.loc[i, f"mersi_t"] = image.dt.isoformat()
         df.loc[i, f"mersi_sensor_zenith_deg"] = image.sensor_zenith[site_i, site_j] / 100
         df.loc[i, f"mersi_sensor_azimuth_deg"] = image.sensor_azimuth[site_i, site_j] / 100
-        df.loc[i, f"mersi_counts[{wl}nm]"] = counts.mean()
-        df.loc[i, f"mersi_counts_std[{wl}nm]"] = counts.std()
-        df.loc[i, f"mersi_radiance[{wl}nm]"] = radiance.mean()
-        df.loc[i, f"mersi_radiance_std[{wl}nm]"] = radiance.std()
-        df.loc[i, f"mersi_reflectance[{wl}nm]"] = reflectance.mean()
-        # df.loc[i, f"mersi_reflectance_std[{wl}nm]"] = reflectance.std()
-        # df.loc[i, f"mersi_apparent_reflectance[{wl}nm]"] = apparent_reflectance.mean()
-        # df.loc[i, f"mersi_apparent_reflectance_std[{wl}nm]"] = apparent_reflectance.std()
-        df.loc[i, f"mersi_6S_radiance[{wl}nm]"] = radiance_corrected
-        # df.loc[i, f"mersi_6S_radiance_std[{wl}nm]"] = radiance_corrected.std()
-        df.loc[i, f"mersi_6S_reflectance[{wl}nm]"] = reflectance_corrected
-        # df.loc[i, f"mersi_6S_reflectance_std[{wl}nm]"] = reflectance_corrected.std()
+        df.loc[i, f"mersi{suffix}_counts[{wl}nm]"] = counts.mean()
+        df.loc[i, f"mersi{suffix}_counts_std[{wl}nm]"] = counts.std()
+        df.loc[i, f"mersi{suffix}_radiance[{wl}nm]"] = radiance.mean()
+        df.loc[i, f"mersi{suffix}_radiance_std[{wl}nm]"] = radiance.std()
+        df.loc[i, f"mersi{suffix}_reflectance[{wl}nm]"] = reflectance.mean()
+        # df.loc[i, f"mersi{suffix}_reflectance_std[{wl}nm]"] = reflectance.std()
+        # df.loc[i, f"mersi{suffix}_apparent_reflectance[{wl}nm]"] = apparent_reflectance.mean()
+        # df.loc[i, f"mersi{suffix}_apparent_reflectance_std[{wl}nm]"] = apparent_reflectance.std()
+        df.loc[i, f"mersi{suffix}_6S_radiance[{wl}nm]"] = radiance_corrected
+        # df.loc[i, f"mersi{suffix}_6S_radiance_std[{wl}nm]"] = radiance_corrected.std()
+        df.loc[i, f"mersi{suffix}_6S_reflectance[{wl}nm]"] = reflectance_corrected
+        # df.loc[i, f"mersi{suffix}_6S_reflectance_std[{wl}nm]"] = reflectance_corrected.std()
 
 
 def homogeneous_pixels_mask(image: MERSIImage, area_idx):
@@ -170,6 +172,13 @@ if __name__ == '__main__':
         for band in BANDS:
             image = MERSIImage.from_dt(mersi_dt, band)
             process_image(image)
+            calibration.full_correct_image(
+                image,
+                remove_zebra=True,
+                remove_neighbor_influence=True,
+                remove_trace=True,
+            )
+            process_image(image, suffix="_calibrated")
 
     df = df[df["mersi_t"] == df["mersi_t"]]
     df.to_csv("data_with_mersi.csv", sep="\t", index=False)
