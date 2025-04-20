@@ -1,4 +1,5 @@
 from abc import ABC
+from abc import abstractmethod
 from datetime import datetime
 
 import folium
@@ -12,13 +13,6 @@ from custom_types import LonLat
 class SatelliteImage(ABC):
     file_path: str
     satellite_name: str
-
-    latitude: np.ndarray
-    longitude: np.ndarray
-    radiance: np.ndarray
-    reflectance: np.ndarray
-    sensor_zenith: np.ndarray
-    solar_zenith: np.ndarray
 
     dt: datetime
 
@@ -59,3 +53,18 @@ class SatelliteImage(ABC):
         folium.Polygon(
             utils.reverse_coords(utils.fix_antimeridian(corners)),
         ).add_to(map_obj)
+
+    @classmethod
+    @abstractmethod
+    def all_dts(cls) -> list[datetime]:
+        pass
+
+    @property
+    @abstractmethod
+    def radiance(self) -> np.ndarray:
+        pass
+
+    @property
+    @abstractmethod
+    def reflectance(self) -> np.ndarray:
+        pass

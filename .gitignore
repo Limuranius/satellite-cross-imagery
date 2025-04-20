@@ -3,3 +3,7 @@ imagery
 *.jpg
 *.ipynb
 *.csv
+*.png
+*.xlsx
+*.pkl
+*.txt

@@ -9,6 +9,7 @@ from global_land_mask import globe
 import cv2
 
 import paths
+from custom_types import MatchingPixelsArray
 from processing.MERSIImage import MERSIImage
 from processing.MODISImage import MODISImage
 from processing.std_map import load_rstd_map
@@ -17,20 +18,26 @@ from processing.std_map import load_rstd_map
 def get_matching_pixels(
         image_mersi: MERSIImage,
         image_modis: MODISImage,
-) -> list[tuple[int, int], tuple[int, int]]:
+) -> MatchingPixelsArray:
     coords = np.array([image_mersi.longitude, image_mersi.latitude])
     coords = coords.transpose((1, 2, 0))
     coords = coords.reshape((-1, 2))  # flatten
+    if not hasattr(image_modis, "geo_kdtree"):
+        image_modis.create_kdtree()
     fast_match = image_modis.geo_kdtree.query(coords)
     distance, indices = fast_match
 
     max_distance = 0.01
 
     mersi_i, mersi_j = np.unravel_index(list(range(len(indices))), image_mersi.latitude.shape)
-    modis_i, modis_j = np.unravel_index(indices, image_modis.latitude.shape)
+    modis_i, modis_j = np.unravel_index(indices, list(image_modis.counts.shape))
     distance_mask = distance <= max_distance
 
-    result = [((mersi_i[i], mersi_j[i]), (modis_i[i], modis_j[i])) for i in range(len(indices)) if distance_mask[i]]
+    result = np.array([
+        [mersi_i, mersi_j],
+        [modis_i, modis_j],
+    ]).transpose((2, 0, 1))
+    result = result[distance_mask]
     return result
 
 
@@ -73,30 +80,37 @@ def get_matching_pixels_filename(
 def filter_matching_pixels(
         image_mersi: MERSIImage,
         image_modis: MODISImage,
-        pixels: list[tuple[int, int], tuple[int, int]],
-        max_zenith_relative_diff: float,
-        max_zenith: int,
-        exclude_clouds: bool,
-        exclude_land: bool,
-        exclude_water: bool,
-        do_erosion: bool,
-        correct_cloud_movement: bool,
-        use_rstd_filtering: bool,
-        rstd_kernel_size: int,
-        rstd_threshold: float,
-        exclude_overflow: bool,
-) -> list[tuple[int, int], tuple[int, int]]:
-    mersi_pixels = np.array([pixel[0] for pixel in pixels]).transpose(1, 0)
-    modis_pixels = np.array([pixel[1] for pixel in pixels]).transpose(1, 0)
+        pixels: MatchingPixelsArray,
+        max_zenith_relative_diff: float = None,
+        max_zenith: int = None,
+        exclude_clouds: bool = False,
+        exclude_land: bool = False,
+        exclude_water: bool = False,
+        do_erosion: bool = False,
+        correct_cloud_movement: bool = False,
+        use_rstd_filtering: bool = False,
+        rstd_kernel_size: int = 5,
+        rstd_threshold: float = 0.1,
+        exclude_overflow: bool = False,
+) -> MatchingPixelsArray:
+    mersi_pixels = pixels[:, 0].transpose(1, 0)
+    modis_pixels = pixels[:, 1].transpose(1, 0)
+    mask = np.ones(len(pixels), dtype=bool)
 
     zenith_mersi = image_mersi.sensor_zenith[*mersi_pixels]
     zenith_modis = image_modis.sensor_zenith[*modis_pixels]
-    # zenith_diff_good = np.abs(zenith_modis - zenith_mersi) < max_zenith_diff
-    zenith_diff_good = np.abs(
-        np.cos(np.radians(zenith_modis / 100)) / np.cos(np.radians(zenith_mersi / 100)) - 1) < max_zenith_relative_diff
-    zenith_not_big = zenith_mersi < max_zenith
 
-    mask = zenith_diff_good & zenith_not_big
+    if max_zenith_relative_diff:
+        zenith_diff_good = np.abs(
+            np.cos(np.radians(zenith_modis / 100)) /
+            np.cos(np.radians(zenith_mersi / 100)) - 1
+        ) < max_zenith_relative_diff
+        mask &= zenith_diff_good
+
+    if max_zenith:
+        zenith_not_big = zenith_mersi < max_zenith
+        mask &= zenith_not_big
+
     if exclude_clouds:
         has_no_clouds = image_modis.cloud_mask[*modis_pixels] == 3
         mask &= has_no_clouds
@@ -130,64 +144,11 @@ def filter_matching_pixels(
     if exclude_overflow:
         for i, (mersi_coord, modis_coord) in enumerate(pixels):
             mersi_overflow = image_mersi.counts[*mersi_coord] > 4050
-            modis_overflow = image_modis.scaled_integers[*modis_coord] > 60000
+            modis_overflow = image_modis.counts[*modis_coord] > 60000
             mask[i] = mask[i] and not mersi_overflow and not modis_overflow
 
-    pixels = [pixels[i] for i in range(len(pixels)) if mask[i]]
-
+    pixels = pixels[mask]
     return pixels
-
-
-def visualize_matching_pixels(
-        image_mersi: MERSIImage,
-        image_modis: MODISImage,
-        pixels: list[tuple[int, int], tuple[int, int]]
-):
-    mask_mersi = np.zeros_like(image_mersi.radiance, dtype=bool)
-    mask_modis = np.zeros_like(image_modis.radiance, dtype=bool)
-    mersi_radiances = []
-    modis_radiances = []
-    for (mersi_i, mersi_j), (modis_i, modis_j) in pixels:
-        mask_mersi[mersi_i, mersi_j] = True
-        mask_modis[modis_i, modis_j] = True
-        mersi_radiances.append(image_mersi.radiance[mersi_i, mersi_j])
-        modis_radiances.append(image_modis.radiance[modis_i, modis_j])
-
-    im1 = image_mersi.radiance.copy()
-    im2 = image_mersi.radiance.copy()
-    im2[~mask_mersi] = 0
-    im3 = image_modis.radiance.copy()
-    im4 = image_modis.radiance.copy()
-    im4[~mask_modis] = 0
-
-    fig, ax = plt.subplots(ncols=3, nrows=2)
-    fig.set_figheight(15)
-    fig.set_figwidth(30)
-    ax[0][0].imshow(im1)
-    ax[0][0].set_title("MERSI-2 image")
-
-    ax[0][1].imshow(im2)
-    ax[0][1].set_title("MERSI-2 matching pixels")
-    ax[0][1].sharex(ax[0][0])
-    ax[0][1].sharey(ax[0][0])
-
-    ax[0][2].hist(mersi_radiances, bins=100)
-    ax[0][2].set_title("MERSI-2 matching pixels radiance histogram")
-    ax[0][2].set_xlabel("radiance")
-
-    ax[1][0].imshow(im3)
-    ax[1][0].set_title("MODIS AQUA image")
-
-    ax[1][1].imshow(im4)
-    ax[1][1].set_title("MODIS AQUA matching pixels")
-    ax[1][0].sharex(ax[1][1])
-    ax[1][0].sharey(ax[1][1])
-
-    ax[1][2].sharex(ax[0][2])
-    ax[1][2].sharey(ax[0][2])
-    ax[1][2].hist(modis_radiances, bins=100)
-    ax[1][2].set_title("MODIS matching pixels radiance histogram")
-    ax[1][2].set_xlabel("radiance")
 
 
 def matching_stats(
@@ -199,28 +160,30 @@ def matching_stats(
     modis_pixels = np.array([pixel[1] for pixel in pixels]).transpose(1, 0)
     mersi_rad = image_mersi.radiance[*mersi_pixels]
     modis_rad = image_modis.radiance[*modis_pixels]
-    rad_diff = mersi_rad - modis_rad
+    mersi_ref = image_mersi.reflectance[*mersi_pixels]
+    modis_ref = image_modis.reflectance[*modis_pixels]
     mersi_senz = image_mersi.sensor_zenith[*mersi_pixels]
     modis_senz = image_modis.sensor_zenith[*modis_pixels]
     mersi_counts = image_mersi.counts[*mersi_pixels]
-    modis_counts = image_modis.scaled_integers[*modis_pixels]
+    modis_counts = image_modis.counts[*modis_pixels]
     mersi_solz = image_mersi.solar_zenith[*mersi_pixels]
     modis_solz = image_modis.solar_zenith[*modis_pixels]
-    rad_relation = mersi_rad / modis_rad
     mersi_y = modis_pixels[0]
+    sensor = mersi_y % 10
 
     df = pd.DataFrame({
         "mersi_rad": mersi_rad,
         "modis_rad": modis_rad,
-        "rad_diff": rad_diff,
+        "mersi_ref": mersi_ref,
+        "modis_ref": modis_ref,
         "mersi_senz": mersi_senz,
         "modis_senz": modis_senz,
         "mersi_counts": mersi_counts,
         "modis_counts": modis_counts,
         "mersi_solz": mersi_solz,
         "modis_solz": modis_solz,
-        "rad_relation": rad_relation,
         "mersi_y": mersi_y,
+        "sensor": sensor,
     })
     print("Pixels in statistics:", len(df))
     return df
@@ -285,48 +248,3 @@ def aggregated_matching_stats(
     print("Pixels in statistics:", len(df))
     return df
 
-
-def load_matching_pixels(
-        image_mersi: MERSIImage,
-        image_modis: MODISImage,
-        *,
-        max_zenith_relative_diff: float,
-        max_zenith: int,
-        exclude_clouds: bool,
-        exclude_land: bool,
-        exclude_water: bool,
-        do_erosion: bool,
-        correct_cloud_movement: bool,
-        use_rstd_filtering: bool,
-        rstd_kernel_size: int,
-        rstd_threshold: float,
-        exclude_overflow: bool,
-
-        force_recalculate=False,
-) -> list[tuple[int, int], tuple[int, int]]:
-    file_path = get_matching_pixels_filename(
-        image_mersi, image_modis,
-        max_zenith_relative_diff, max_zenith,
-        exclude_clouds, exclude_land, exclude_water,
-        do_erosion, correct_cloud_movement,
-        use_rstd_filtering, rstd_kernel_size, rstd_threshold,
-        exclude_overflow,
-    )
-    if os.path.exists(file_path) and not force_recalculate:
-        with open(file_path, "rb") as file:
-            return pickle.load(file)
-    else:
-        print("Matching pixels... ", end="")
-        pixels = get_matching_pixels(image_mersi, image_modis)
-        pixels = filter_matching_pixels(
-            image_mersi, image_modis, pixels,
-            max_zenith_relative_diff, max_zenith,
-            exclude_clouds, exclude_land, exclude_water,
-            do_erosion, correct_cloud_movement,
-            use_rstd_filtering, rstd_kernel_size, rstd_threshold,
-            exclude_overflow
-        )
-        print("Done!")
-        with open(file_path, "wb") as file:
-            pickle.dump(pixels, file)
-        return pixels

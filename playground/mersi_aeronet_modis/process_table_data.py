@@ -8,7 +8,6 @@ from Py6S import *
 import SRF.mersi_2_srf
 import calibration
 from processing.MERSIImage import MERSIImage
-from processing.preprocessing import get_mersi_dates
 
 
 def outliers_mask(data):
@@ -166,8 +165,12 @@ df = pd.read_csv("data.csv", sep="\t")
 df["modis_t"] = pd.to_datetime(df["modis_t"], format="mixed")
 df["aeronet_t"] = pd.to_datetime(df["aeronet_t"])
 df = df[df["modis_zenith"].notna()]
+print(df["modis_t"].min(), df["modis_t"].max())
+mersi_dts = MERSIImage.all_dts()
+print(len(mersi_dts))
+print(len(df))
+
 if __name__ == '__main__':
-    mersi_dts = get_mersi_dates()
     for mersi_dt in tqdm.tqdm(mersi_dts):
         for band in BANDS:
             image = MERSIImage.from_dt(mersi_dt, band)

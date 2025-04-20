@@ -22,8 +22,6 @@ l1_geo_size = 78.1
 size = l1_size + l1_geo_size
 to_order_count = math.floor(remain_space / size)
 
-need_download_dts = need_download_dts[2 * to_order_count:]
-
 print(f"Can order {to_order_count} L1 and L1_GEO pairs")
 NSMC_parser.select_dts(need_download_dts[:to_order_count], NSMC_parser.DataType.L1)
 NSMC_parser.select_dts(need_download_dts[:to_order_count], NSMC_parser.DataType.L1_GEO)

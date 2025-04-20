@@ -2,8 +2,11 @@ import os
 from datetime import datetime
 
 import numpy as np
+import pyhdf.SD
 from pyhdf.SD import SD
 
+import paths
+import processing.preprocessing
 from paths import MODIS_L1B_DIR, MODIS_L1B_GEO_DIR
 from .SatelliteImage import SatelliteImage
 
@@ -28,6 +31,9 @@ BANDS_WAVELEN = {
 }
 
 
+LAZY_MODE = False
+
+
 class MODISImage(SatelliteImage):
     """
         00 = cloudy
@@ -39,39 +45,45 @@ class MODISImage(SatelliteImage):
     scaled_integers: np.ndarray
     water_mask: np.ndarray
 
+    latitude: pyhdf.SD.SDS
+    longitude: pyhdf.SD.SDS
+    sensor_zenith: pyhdf.SD.SDS
+    solar_zenith: pyhdf.SD.SDS
+
+
     def __init__(self, file_path: str, geo_path: str, band: str):
         self.satellite_name = "AQUA"
         self.file_path = file_path
         self.band = band
         self.wavelength = BANDS_WAVELEN[band]
-        hdf = SD(file_path)
-        geo_hdf = SD(geo_path)
+        self.hdf = SD(file_path)
+        self.geo_hdf = SD(geo_path)
 
-        self.latitude = geo_hdf.select("Latitude")[:]
-        self.longitude = geo_hdf.select("Longitude")[:]
-        self.sensor_zenith = geo_hdf.select("SensorZenith")[:]
-        self.solar_zenith = geo_hdf.select("SolarZenith")[:]
+        self.latitude = self.geo_hdf.select("Latitude")
+        self.longitude = self.geo_hdf.select("Longitude")
+        self.sensor_zenith = self.geo_hdf.select("SensorZenith")
+        self.solar_zenith = self.geo_hdf.select("SolarZenith")
 
-        RefSB = hdf.select("EV_1KM_RefSB")
-        radiance_scales = RefSB.attributes()["radiance_scales"]
-        radiance_offsets = RefSB.attributes()["radiance_offsets"]
-        reflectance_scales = RefSB.attributes()["reflectance_scales"]
-        reflectance_offsets = RefSB.attributes()["reflectance_offsets"]
-        band_index = MODIS_BANDS.index(band)
-        self.scaled_integers = RefSB[:][band_index]
-        self.radiance = (RefSB[:][band_index].astype(float) - radiance_offsets[band_index]) * radiance_scales[
-            band_index]
-        self.reflectance = (RefSB[:][band_index].astype(float) - reflectance_offsets[band_index]) * reflectance_scales[
-            band_index]
+        if not LAZY_MODE:
+            self.latitude = self.latitude[:]
+            self.longitude = self.longitude[:]
+            self.sensor_zenith = self.sensor_zenith[:]
+            self.solar_zenith = self.solar_zenith[:]
 
-        water_mask_band = MODIS_BANDS.index("17")
-        water_mask_radiance = (RefSB[:][water_mask_band].astype(float) - radiance_offsets[water_mask_band]) * \
-                              radiance_scales[water_mask_band]
-        self.water_mask = water_mask_radiance < 20.0
+        RefSB = self.hdf.select("EV_1KM_RefSB")
+        self.band_index = MODIS_BANDS.index(band)
+        self.counts = RefSB[self.band_index, :].astype(int)
+        self.radiance_scales = RefSB.attributes()["radiance_scales"]
+        self.radiance_offsets = RefSB.attributes()["radiance_offsets"]
+        self.reflectance_scales = RefSB.attributes()["reflectance_scales"]
+        self.reflectance_offsets = RefSB.attributes()["reflectance_offsets"]
 
-        self.dt = extract_datetime(hdf.attributes()["CoreMetadata.0"])
+        # water_mask_band = MODIS_BANDS.index("17")
+        # water_mask_radiance = (RefSB[:][water_mask_band].astype(float) - radiance_offsets[water_mask_band]) * \
+        #                       radiance_scales[water_mask_band]
+        # self.water_mask = water_mask_radiance < 20.0
 
-        self.create_kdtree()
+        self.dt = extract_datetime(self.hdf.attributes()["CoreMetadata.0"])
 
     def load_cloud_mask(self, path: str):
         hdf = SD(path)
@@ -82,21 +94,25 @@ class MODISImage(SatelliteImage):
         self.cloud_mask = cloud_mask
 
     def colored_image(self) -> np.ndarray:
-        # r - B01, g - B04, b - B03
-        hdf = SD(self.file_path)
-        rsb250 = hdf.select("EV_250_Aggr1km_RefSB")
-        rsb500 = hdf.select("EV_500_Aggr1km_RefSB")
-        # r = (rsb250[0][:] / 32768) * 0.0249
-        # g = (rsb500[1][:] / 32768) * 0.0188
-        # b = (rsb500[0][:] / 32768) * 0.0245
-        r = (rsb250[0][:] / 32768) * 3.5
-        g = (rsb500[1][:] / 32768) * 3.5 / 1.38
-        b = (rsb500[0][:] / 32768) * 3.5
-        # r = (r // 128).astype(np.uint8)
-        # g = (g // 128).astype(np.uint8)
-        # b = (b // 128).astype(np.uint8)
+        rsb250 = self.hdf.select("EV_250_Aggr1km_RefSB")
+        rsb500 = self.hdf.select("EV_500_Aggr1km_RefSB")
+        r = rsb250[0][:]  # band 1
+        g = rsb500[1][:]  # band 4
+        b = rsb500[0][:]  # band 3
+
+        scale250 = rsb250.attributes()["reflectance_scales"]
+        offset250 = rsb250.attributes()["reflectance_offsets"]
+        scale500 = rsb500.attributes()["reflectance_scales"]
+        offset500 = rsb500.attributes()["reflectance_offsets"]
+
+        r = (r.astype(float) - offset250[0]) * scale250[0]
+        g = (g.astype(float) - offset500[1]) * scale500[1]
+        b = (b.astype(float) - offset500[0]) * scale500[0]
+
         channels = [r, g, b]
         img = np.array(channels).transpose(1, 2, 0)
+        img = np.minimum(img * 255 * 2, 255)
+        img = img.astype(np.uint8)
         return img
 
     @staticmethod
@@ -110,6 +126,21 @@ class MODISImage(SatelliteImage):
             if l1b_geo_filename.startswith(l1b_geo_file_start):
                 l1b_geo_path = os.path.join(MODIS_L1B_GEO_DIR, l1b_geo_filename)
         return MODISImage(l1b_path, l1b_geo_path, band)
+
+    @classmethod
+    def all_dts(cls) -> list[datetime]:
+        dts = []
+        for path in paths.MODIS_L1B_DIR.glob("*"):
+            dts.append(processing.preprocessing.get_modis_file_dt(path))
+        return dts
+
+    @property
+    def reflectance(self) -> np.ndarray:
+        return (self.counts - self.reflectance_offsets[self.band_index]) * self.reflectance_scales[self.band_index]
+
+    @property
+    def radiance(self) -> np.ndarray:
+        return (self.counts - self.radiance_offsets[self.band_index]) * self.radiance_scales[self.band_index]
 
 
 def extract_date_str(meta):

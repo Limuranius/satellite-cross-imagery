@@ -33,7 +33,7 @@ def find_close_timedelta_imgs(
 
 
 def intersection_percent(info1: Info, info2: Info) -> float:
-    return utils.intersection_percent(
+    return utils.iou(
         [info1.p1, info1.p2, info1.p3, info1.p4],
         [info2.p1, info2.p2, info2.p3, info2.p4]
     )

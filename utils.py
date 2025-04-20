@@ -1,7 +1,11 @@
+import pathlib
 import random
 from datetime import datetime, timedelta
 
+import cv2
+import numpy as np
 import shapely
+import statsmodels.api as sm
 from geojson import Point, Polygon, Feature
 from turfpy.measurement import boolean_point_in_polygon
 
@@ -41,7 +45,7 @@ def fix_antimeridian(coords_list: list[LonLat]) -> list[LonLat]:
     return result
 
 
-def intersection_percent(
+def iou(
         poly1: list[LonLat],
         poly2: list[LonLat],
 ) -> float:
@@ -58,4 +62,44 @@ def datetime_range(start: datetime, end: datetime, step: timedelta = timedelta(m
         curr += step
 
 
-F0 = dict((int(float(line.split()[0])), float(line.split()[1])) for line in open(r"C:\Users\Gleb\PycharmProjects\satellite-cross-imagery\Thuillier2003.txt").read().strip().split("\n"))
+def match_dts_timedelta(
+        dts1: list[datetime],
+        dts2: list[datetime],
+        td: timedelta,
+) -> dict[datetime, list[datetime]]:
+    groups = dict()
+    for dt1 in dts1:
+        group = []
+        for dt2 in dts2:
+            if abs(dt1 - dt2) <= td:
+                group.append(dt2)
+        if len(group) > 0:
+            groups[dt1] = group
+    return groups
+
+
+def get_image_gradient(img: np.ndarray) -> np.ndarray:
+    dx_k = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+    dy_k = dx_k.T
+    dx = cv2.filter2D(img, -1, dx_k)
+    dy = cv2.filter2D(img, -1, dy_k)
+    return np.hypot(dx, dy)
+
+
+def linregress_report(x, y):
+    model = sm.OLS(y, x)
+    results = model.fit()
+    slope = results.params[0]
+    interv95 = slope - results.conf_int(0.05)[0][0]
+
+    return {
+        "slope": slope,
+        "+-": interv95,
+        "ME": (y - x).mean(),
+        "RMSE": np.sqrt(np.square(y - x).mean()),
+        "R^2": results.rsquared
+    }
+
+
+F0 = dict((int(float(line.split()[0])), float(line.split()[1])) for line in
+          open(pathlib.Path(__file__).parent / "Thuillier2003.txt").read().strip().split("\n"))

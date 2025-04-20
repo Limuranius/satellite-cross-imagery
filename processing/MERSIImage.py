@@ -10,7 +10,6 @@ import numpy as np
 import paths
 from paths import MERSI_L1_DIR, MERSI_L1_GEO_DIR
 from .SatelliteImage import SatelliteImage
-from .preprocessing import get_mersi_dates
 
 MERSI_2_BANDS = ["5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"]
 BANDS_WAVELEN = {
@@ -158,6 +157,8 @@ E0 = {
 #                 yield MERSIImage.from_dt(dt, band)
 
 
+FAST_MODE = True
+
 
 class MERSIImage(SatelliteImage):
     blackbody: np.ndarray
@@ -179,6 +180,13 @@ class MERSIImage(SatelliteImage):
         self.sensor_zenith = self.hdf_geo["Geolocation"]["SensorZenith"]      #
         self.sensor_azimuth = self.hdf_geo["Geolocation"]["SensorAzimuth"]    # degrees multiplied by 100 (e.g. 3452 for 34.52 degrees)
         self.solar_zenith = self.hdf_geo["Geolocation"]["SolarZenith"]        #
+
+        if not FAST_MODE:
+            self.latitude = self.latitude[:]
+            self.longitude = self.longitude[:]
+            self.sensor_zenith = self.sensor_zenith[:]
+            self.sensor_azimuth = self.sensor_azimuth[:]
+            self.solar_zenith = self.solar_zenith[:]
 
         date_str = self.hdf.attrs["Observing Beginning Date"].decode()
         time_str = self.hdf.attrs["Observing Beginning Time"].decode().split(".")[0]
@@ -261,7 +269,7 @@ class MERSIImage(SatelliteImage):
 
     @classmethod
     def between_dates(cls, start: datetime, end: datetime, band: str):
-        for dt in get_mersi_dates():
+        for dt in cls.all_dts():
             if start <= dt <= end:
                 yield MERSIImage.from_dt(dt, band)
 
