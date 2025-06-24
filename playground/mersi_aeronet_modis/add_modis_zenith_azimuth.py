@@ -8,7 +8,7 @@ df = pd.read_csv("data.csv", sep="\t")
 df["modis_t"] = pd.to_datetime(df["modis_t"], format="mixed")
 df["aeronet_t"] = pd.to_datetime(df["aeronet_t"])
 
-tles = open("aqua_tles_2019-2020.txt").readlines()
+tles = open("MODIS AQUA TLEs 2010-2025.txt").readlines()
 tles = [(tles[i + 1].strip(), tles[i + 2].strip()) for i in range(0, len(tles), 3)]
 orbs = [Orbital("AQUA", line1=tle[0], line2=tle[1]) for tle in tles]
 

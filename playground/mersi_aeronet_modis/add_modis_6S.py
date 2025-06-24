@@ -2,6 +2,7 @@ import pandas as pd
 import tqdm
 from Py6S import *
 import datetime
+import paths
 
 
 WL_TO_BAND = {
@@ -70,7 +71,7 @@ def atmosphere_correction(
 
     return reflectance_corrected, radiance_corrected
 
-df = pd.read_csv("data_with_mersi.csv", sep="\t")
+df = pd.read_csv(paths.DATA_DIR / "data_with_mersi.csv", sep="\t")
 df["modis_t"] = pd.to_datetime(df["modis_t"], format="mixed")
 df["aeronet_t"] = pd.to_datetime(df["aeronet_t"])
 
@@ -96,4 +97,4 @@ for i, row in tqdm.tqdm(df.iterrows(), total=len(df)):
         df.loc[i, f"modis_{wl}_6S_Lt"] = radiance_corrected
 
 
-df.to_csv("data_with_mersi.csv", sep="\t", index=False)
+df.to_csv(paths.DATA_DIR / "data_with_mersi.csv", sep="\t", index=False)

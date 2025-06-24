@@ -14,6 +14,7 @@ MODIS_CLOUD_MASK_DIR = MODIS_DIR / "Cloud Mask"
 MERSI_DIR = IMAGERY_DIR / "MERSI-2"
 MERSI_L1_DIR = MERSI_DIR / "L1"
 MERSI_L1_GEO_DIR = MERSI_DIR / "L1 GEO"
+MERSI_CLOUD_MASK_DIR = MERSI_DIR / "Cloud Mask"
 
 MATCHING_PIXELS_DIR = IMAGERY_DIR / "matching pixels"
 RSTD_MAPS_DIR = IMAGERY_DIR / "relative std maps"
@@ -21,6 +22,8 @@ RSTD_MAPS_DIR = IMAGERY_DIR / "relative std maps"
 CALIBRATION_DIR = DIR_PATH / "calibration"
 EDGE_MASKS_DIR = CALIBRATION_DIR / "edge masks"
 COEFFS_DIR = CALIBRATION_DIR / "coefficients"
+
+DATA_DIR = DIR_PATH / "data"
 
 for dir_path in [
     MODIS_L1B_DIR,
@@ -34,5 +37,7 @@ for dir_path in [
     RSTD_MAPS_DIR,
 
     EDGE_MASKS_DIR,
+
+    DATA_DIR
 ]:
     os.makedirs(dir_path, exist_ok=True)

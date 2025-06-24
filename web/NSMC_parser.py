@@ -95,7 +95,7 @@ def get_many_metadatas(
             continue
         responses.append((
             dts[i],
-            resp.json()
+            resp.json()["resource"]
         ))
     print("Timeouts:", timeout_count)
     return responses
@@ -161,17 +161,4 @@ def get_order_info(order_code: str):
         f"https://satellite.nsmc.org.cn/DataPortal/v1/data/order/{order_code}/url",
         headers={"Cookie": cookie},
     ).json()["resource"]
-
-
-ord_list = get_orders_list()
-for ord in ord_list:
-    ord_code = ord["ordercode"]
-    ord_info = get_order_info(ord_code)
-    if "FTPACCOUNT" in ord_info:
-        name = ord_info["FTPACCOUNT"]
-        password = ord_info["FTPPASSWORD"]
-        print(f"ftp://{name}:{password}@ftp.nsmc.org.cn")
-
-# print(get_order_info("A202504130811037011"))
-
 

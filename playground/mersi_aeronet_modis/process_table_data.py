@@ -1,4 +1,6 @@
+import collections
 import datetime
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -7,21 +9,38 @@ from Py6S import *
 
 import SRF.mersi_2_srf
 import calibration
+import paths
 from processing.MERSIImage import MERSIImage
 
 
-def outliers_mask(data):
+def outliers_thresholds(data: np.ndarray) -> tuple[float, float]:
     q1 = np.percentile(data, 25)
     q3 = np.percentile(data, 75)
     iqr = q3 - q1
     threshold = 1.5 * iqr
-    return (data < q1 - threshold) | (data > q3 + threshold)
+    return (q1 - threshold), (q3 + threshold)
+
+
+def outliers_mask(data):
+    l, r = outliers_thresholds(data)
+    return (data < l) | (data > r)
 
 
 def outliers_2d_mask(data_2d: np.ndarray):
     data = data_2d.flatten()
     mask_1d = outliers_mask(data)
     return mask_1d.reshape(data_2d.shape)
+
+
+def homogeneous_pixels_mask(image: MERSIImage, area_idx):
+    band13 = image.get_band("13")
+    reflectance13 = band13.reflectance[*area_idx]
+    mask = reflectance13 < 0.1  # Альбедо 10% всегда облачность
+    if mask.sum() == 0:
+        return None
+    l, r = outliers_thresholds(reflectance13[mask])
+    mask = mask & (reflectance13 >= l) & (reflectance13 <= r)
+    return mask
 
 
 def atmosphere_correction(
@@ -35,7 +54,9 @@ def atmosphere_correction(
         view_zenith: float,  # degrees
         view_azimuth: float,  # degrees
         aot550: float,
-) -> tuple[float, float]:
+        wind_speed: float,
+        chlorophyll: float,
+):
     s = SixS()
     s.wavelength = Wavelength(
         start_wavelength=start_wavelength,
@@ -53,20 +74,27 @@ def atmosphere_correction(
     s.aot550 = aot550
     s.altitudes.set_target_sea_level()
     s.altitudes.set_sensor_satellite_level()
+    s.atmos_profile = AtmosProfile.FromLatitudeAndDate(pixel_lat, dt.date().isoformat())
+    s.ground_reflectance = GroundReflectance.HomogeneousOcean(
+        wind_speed=wind_speed,
+        wind_azimuth=0,
+        salinity=-1,
+        pigment_concentration=chlorophyll,
+    )
 
     s.atmos_corr = AtmosCorr.AtmosCorrBRDFFromRadiance(radiance)
 
     s.run()
     output = s.outputs
-    reflectance_corrected = output.atmos_corrected_reflectance_brdf
-    radiance_corrected = radiance - output.atmospheric_intrinsic_radiance
-
-    return reflectance_corrected, radiance_corrected
-
+    # reflectance_corrected = output.atmos_corrected_reflectance_brdf
+    # radiance_corrected = radiance - output.atmospheric_intrinsic_radiance
+    # return reflectance_corrected, radiance_corrected
+    return output
 
 def process_image(
         image: MERSIImage,
         suffix: str = "",
+        do_atmospheric_correction=True,
 ):
     for i, row in iterate_rows_timedelta_within_image(image):
         site_i, site_j = image.get_closest_pixel(row["aeronet_lon"], row["aeronet_lat"])
@@ -90,30 +118,6 @@ def process_image(
         reflectance = image.reflectance_slice(area_idx)[good_pixels_mask]
         # apparent_reflectance = image.apparent_reflectance[*area_idx][good_pixels_mask]
 
-        # Atmospheric correction values
-        srf = SRF.mersi_2_srf.get_band(int(image.band))
-        min_wl = srf[0, 0]
-        max_wl = srf[-1, 0]
-        srf_grid = SRF.mersi_2_srf.range_srf(int(image.band), min_wl, max_wl, 2.5)
-        max_wl = srf_grid[-1, 0]
-        aot550 = row["aeronet_Aerosol_Optical_Depth[551nm]"]
-        if aot550 != aot550:
-            aot550 = row["aeronet_Aerosol_Optical_Depth[555nm]"]
-        if aot550 != aot550:
-            aot550 = row["aeronet_Aerosol_Optical_Depth[560nm]"]
-        reflectance_corrected, radiance_corrected = atmosphere_correction(
-            radiance=radiance.mean(),
-            start_wavelength=min_wl / 1000,
-            end_wavelength=max_wl / 1000,
-            srf=srf_grid[:, 1],
-            pixel_lat=image.latitude[site_i, site_j],
-            pixel_lon=image.longitude[site_i, site_j],
-            dt=image.dt,
-            view_zenith=image.sensor_zenith[site_i, site_j] / 100,
-            view_azimuth=image.sensor_azimuth[site_i, site_j] / 100,
-            aot550=aot550
-        )
-
         wl = image.wavelength
         df.loc[i, f"mersi_n_good_pixels"] = good_pixels_mask.sum()
         df.loc[i, f"mersi_minutes_diff_aeronet"] = (image.dt - row["aeronet_t"]).total_seconds() // 60
@@ -121,6 +125,9 @@ def process_image(
         df.loc[i, f"mersi_t"] = image.dt.isoformat()
         df.loc[i, f"mersi_sensor_zenith_deg"] = image.sensor_zenith[site_i, site_j] / 100
         df.loc[i, f"mersi_sensor_azimuth_deg"] = image.sensor_azimuth[site_i, site_j] / 100
+        df.loc[i, f"mersi_solar_zenith_deg"] = image.solar_zenith[site_i, site_j] / 100
+        df.loc[i, f"mersi_lat"] = image.latitude[site_i, site_j]
+        df.loc[i, f"mersi_lon"] = image.longitude[site_i, site_j]
         df.loc[i, f"mersi{suffix}_counts[{wl}nm]"] = counts.mean()
         df.loc[i, f"mersi{suffix}_counts_std[{wl}nm]"] = counts.std()
         df.loc[i, f"mersi{suffix}_radiance[{wl}nm]"] = radiance.mean()
@@ -129,25 +136,52 @@ def process_image(
         # df.loc[i, f"mersi{suffix}_reflectance_std[{wl}nm]"] = reflectance.std()
         # df.loc[i, f"mersi{suffix}_apparent_reflectance[{wl}nm]"] = apparent_reflectance.mean()
         # df.loc[i, f"mersi{suffix}_apparent_reflectance_std[{wl}nm]"] = apparent_reflectance.std()
-        df.loc[i, f"mersi{suffix}_6S_radiance[{wl}nm]"] = radiance_corrected
-        # df.loc[i, f"mersi{suffix}_6S_radiance_std[{wl}nm]"] = radiance_corrected.std()
-        df.loc[i, f"mersi{suffix}_6S_reflectance[{wl}nm]"] = reflectance_corrected
-        # df.loc[i, f"mersi{suffix}_6S_reflectance_std[{wl}nm]"] = reflectance_corrected.std()
 
+        if do_atmospheric_correction:
+            # Atmospheric correction values
+            srf = SRF.mersi_2_srf.get_band(int(image.band))
+            min_wl = srf[0, 0]
+            max_wl = srf[-1, 0]
+            srf_grid = SRF.mersi_2_srf.range_srf(int(image.band), min_wl, max_wl, 2.5)
+            max_wl = srf_grid[-1, 0]
+            aot550 = row["aeronet_Aerosol_Optical_Depth[551nm]"]
+            if aot550 != aot550:
+                aot550 = row["aeronet_Aerosol_Optical_Depth[555nm]"]
+            if aot550 != aot550:
+                aot550 = row["aeronet_Aerosol_Optical_Depth[560nm]"]
+            def atm(Lt):
+                return atmosphere_correction(
+                    radiance=Lt,
+                    start_wavelength=min_wl / 1000,
+                    end_wavelength=max_wl / 1000,
+                    srf=srf_grid[:, 1],
+                    pixel_lat=image.latitude[site_i, site_j],
+                    pixel_lon=image.longitude[site_i, site_j],
+                    dt=image.dt,
+                    view_zenith=image.sensor_zenith[site_i, site_j] / 100,
+                    view_azimuth=image.sensor_azimuth[site_i, site_j] / 100,
+                    aot550=aot550,
+                    wind_speed=row["aeronet_Wind_Speed(m/s)"],
+                    chlorophyll=row["aeronet_Chlorophyll-a"],
+                )
 
-def homogeneous_pixels_mask(image: MERSIImage, area_idx):
-    band13 = image.get_band("13")
-    reflectance13 = band13.reflectance[*area_idx]
-    mask = reflectance13 < 0.03
-    if mask.sum() == 0:  # Есть случаи, когда альбедо >3%, но вода всё равно однородная
-        mask = ~outliers_2d_mask(reflectance13)
-    else:
-        mask = ~outliers_2d_mask(reflectance13) & mask
-    pixels = reflectance13[mask]
-    if pixels.std() > 0.002:
-        return None  # Слишком зашумлено, невозможно убрать выбросы, потому что не понятно, что является выбросом
-    mask = mask & (reflectance13 < 0.1)  # Не брать однородные облака
-    return mask
+            # reflectance_corrected, radiance_corrected = atm(radiance.mean())
+            out = atm(radiance.mean())
+            atm_outputs[wl].append(out)
+
+            reflectance_corrected = out.atmos_corrected_reflectance_brdf
+            radiance_corrected = (out.diffuse_solar_irradiance + out.direct_solar_irradiance) * out.atmos_corrected_reflectance_brdf
+
+            df.loc[i, f"mersi{suffix}_6S_radiance[{wl}nm]"] = radiance_corrected
+            # df.loc[i, f"mersi{suffix}_6S_radiance_std[{wl}nm]"] = radiance_corrected.std()
+            df.loc[i, f"mersi{suffix}_6S_reflectance[{wl}nm]"] = reflectance_corrected
+            # df.loc[i, f"mersi{suffix}_6S_reflectance_std[{wl}nm]"] = reflectance_corrected.std()
+
+            # При учёте cos(senz)
+            # rrs_cos_senz, Lt_cos_senz = atm(radiance.mean() * np.cos(np.deg2rad(int(image.sensor_zenith[site_i, site_j] / 100))))
+            # df.loc[i, f"mersi{suffix}_6S_radiance_cos_senz[{wl}nm]"] = Lt_cos_senz
+            # df.loc[i, f"mersi{suffix}_6S_reflectance_cos_senz[{wl}nm]"] = rrs_cos_senz
+
 
 def iterate_rows_timedelta_within_image(image: MERSIImage):
     timedelta = (df["aeronet_t"] - image.dt).abs()
@@ -157,11 +191,16 @@ def iterate_rows_timedelta_within_image(image: MERSIImage):
             yield i, row
 
 
+atm_outputs = collections.defaultdict(list)
+# BANDS = [
+#     "8", "9", "10", "11",
+#     "12", "13", "14", "15"
+# ]
 BANDS = [
-    "8", "9", "10", "11",
-    "12", "13", "14", "15"
+    "8", "10", "12",
 ]
-df = pd.read_csv("data.csv", sep="\t")
+# BANDS = ["9"]
+df = pd.read_csv(paths.DATA_DIR / "data.csv", sep="\t")
 df["modis_t"] = pd.to_datetime(df["modis_t"], format="mixed")
 df["aeronet_t"] = pd.to_datetime(df["aeronet_t"])
 df = df[df["modis_zenith"].notna()]
@@ -174,14 +213,20 @@ if __name__ == '__main__':
     for mersi_dt in tqdm.tqdm(mersi_dts):
         for band in BANDS:
             image = MERSIImage.from_dt(mersi_dt, band)
-            process_image(image)
-            calibration.full_correct_image(
+            process_image(
                 image,
-                remove_zebra=True,
-                remove_neighbor_influence=True,
-                remove_trace=True,
+                do_atmospheric_correction=True
             )
-            process_image(image, suffix="_calibrated")
+            # calibration.full_correct_image(
+            #     image,
+            #     remove_zebra=True,
+            #     remove_neighbor_influence=True,
+            #     remove_trace=True,
+            # )
+            # process_image(image, suffix="_calibrated")
 
     df = df[df["mersi_t"] == df["mersi_t"]]
-    df.to_csv("data_with_mersi.csv", sep="\t", index=False)
+    df.to_csv(paths.DATA_DIR / "data_with_mersi.csv", sep="\t", index=False)
+
+    with open("atmosphere.pkl", "wb") as file:
+        pickle.dump(atm_outputs, file)

@@ -86,18 +86,49 @@ def get_image_gradient(img: np.ndarray) -> np.ndarray:
     return np.hypot(dx, dy)
 
 
-def linregress_report(x, y):
+def linregress_report(
+        x,
+        y,
+        use_intercept=False,
+        round_slope=2,
+        round_intercept=2,
+):
+    if use_intercept:
+        x = sm.add_constant(x)
     model = sm.OLS(y, x)
     results = model.fit()
-    slope = results.params[0]
-    interv95 = slope - results.conf_int(0.05)[0][0]
+    if use_intercept:
+        slope = np.array(results.params)[1]
+        slope_interv = slope - np.array(results.conf_int(0.05))[1][0]
+        intercept = np.array(results.params)[0]
+        intercept_interv = intercept - np.array(results.conf_int(0.05))[0][0]
+        slope = round(slope, round_slope)
+        slope_interv = round(slope_interv, round_slope)
+        intercept = round(intercept, round_intercept)
+        intercept_interv = round(intercept_interv, round_intercept)
+    else:
+        slope = np.array(results.params)[0]
+        slope_interv = slope - np.array(results.conf_int(0.05))[0][0]
+        intercept = None
+        intercept_interv = None
+        slope = round(slope, round_slope)
+        slope_interv = round(slope_interv, round_slope)
 
+    if use_intercept:
+        x = x[:, 1]  # Remove constant to calculate ME and RMSE
+    ME = (y - x).mean()
+    RMSE = np.sqrt(np.square(y - x).mean())
     return {
         "slope": slope,
-        "+-": interv95,
-        "ME": (y - x).mean(),
-        "RMSE": np.sqrt(np.square(y - x).mean()),
-        "R^2": results.rsquared
+        "slope_interv": slope_interv,
+        "slope_pretty": f"{slope} ± {slope_interv}",
+        "intercept": intercept,
+        "intercept_interv": intercept_interv,
+        "intercept_pretty": f"{intercept} ± {intercept_interv}",
+        "ME": ME,
+        # "RMSE": np.sqrt(np.square(y - x * slope).mean()),
+        "RMSE": RMSE,
+        "R^2": results.rsquared,
     }
 
 

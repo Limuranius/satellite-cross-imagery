@@ -52,112 +52,7 @@ E0 = {
 }
 
 
-# class MERSIImage(SatelliteImage):
-#     blackbody: np.ndarray
-#     space_view: np.ndarray
-#     voc: np.ndarray
-#
-#     def __init__(self, file_path: str, geo_path: str, band: str):
-#         self.satellite_name = "FY-3D"
-#         self.band = band
-#         self.wavelength = BANDS_WAVELEN[band]
-#         self.file_path = file_path
-#         self.geo_path = geo_path
-#         self.E0 = E0[band]
-#         with h5py.File(file_path) as hdf, h5py.File(geo_path) as hdf_geo:
-#             self.latitude = hdf_geo["Geolocation"]["Latitude"][:]
-#             self.longitude = hdf_geo["Geolocation"]["Longitude"][:]
-#             self.sensor_zenith = hdf_geo["Geolocation"]["SensorZenith"][:]      #
-#             self.sensor_azimuth = hdf_geo["Geolocation"]["SensorAzimuth"][:]    # degrees multiplied by 100 (e.g. 3452 for 34.52 degrees)
-#             self.solar_zenith = hdf_geo["Geolocation"]["SolarZenith"][:]        #
-#
-#             date_str = hdf.attrs["Observing Beginning Date"].decode()
-#             time_str = hdf.attrs["Observing Beginning Time"].decode().split(".")[0]
-#             date = datetime.strptime(date_str, "%Y-%m-%d").date()
-#             time = datetime.strptime(time_str, "%H:%M:%S").time()
-#             self.dt = datetime.combine(date, time)
-#
-#             band_index = MERSI_2_BANDS.index(band)
-#             self.counts = hdf["Data"]["EV_1KM_RefSB"][band_index][:].astype(int)
-#
-#             # Исправляем добавку темнового сигнала
-#             # match self.band:  # FIXME
-#             #     case "8":
-#             #         add_count = 17
-#             #     case "10":
-#             #         add_count = 25
-#             #     case "11":
-#             #         add_count = 23
-#             #     case "12":
-#             #         add_count = 16
-#             #     case _:
-#             #         add_count = 0
-#             # self.counts += add_count
-#
-#             # Fix broken pixels
-#             self.counts[self.counts == 65535] = 0
-#
-#             self.vis_cal = hdf["Calibration"]["VIS_Cal_Coeff"][:]
-#             self.blackbody = hdf["Calibration"]["BB_DN_average"][band_index + 5]
-#             self.space_view = hdf["Calibration"]["SV_DN_average"][band_index + 5]
-#             self.voc = hdf["Calibration"]["VOC_DN_average"][band_index + 5]
-#             self.D = hdf.attrs["EarthSun Distance Ratio"]
-#
-#
-#     def colored_image(self) -> np.ndarray:
-#         with h5py.File(self.file_path) as hdf:
-#             rsb = hdf["Data"]["EV_1KM_RefSB"]
-#             r = rsb[MERSI_2_BANDS.index("12")][:]
-#             g = rsb[MERSI_2_BANDS.index("11")][:]
-#             b = rsb[MERSI_2_BANDS.index("9")][:]
-#             r = (r // 16).astype(np.uint8)
-#             g = (g // 16).astype(np.uint8)
-#             b = (b // 16).astype(np.uint8)
-#             channels = [r, g, b]
-#             img = np.array(channels).transpose(1, 2, 0)
-#             return img
-#
-#     @classmethod
-#     def from_dt(cls, dt: datetime, band: str):
-#         l1_fmt = "FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_1000M_MS.HDF"
-#         l1_geo_fmt = "FY3D_MERSI_GBAL_L1_%Y%m%d_%H%M_GEO1K_MS.HDF"
-#         l1_path = os.path.join(MERSI_L1_DIR, dt.strftime(l1_fmt))
-#         l1_geo_path = os.path.join(MERSI_L1_GEO_DIR, dt.strftime(l1_geo_fmt))
-#         return MERSIImage(l1_path, l1_geo_path, band)
-#
-#
-#     @property
-#     def reflectance(self):
-#         band_index = MERSI_2_BANDS.index(self.band)
-#         Cal_0, Cal_1, Cal_2 = self.vis_cal[band_index]
-#         Slope = 1
-#         Intercept = 0
-#         dn = self.counts * Slope + Intercept
-#         Ref = Cal_2 * dn ** 2 + Cal_1 * dn + Cal_0
-#         return Ref / 100
-#
-#     @property
-#     def radiance(self):
-#         Ref = self.reflectance
-#         return Ref * E0[self.band] / pi
-#
-#     @property
-#     def apparent_reflectance(self):
-#         solz = np.radians(self.solar_zenith / 100)
-#         mu = np.cos(solz)
-#         return self.D ** 2 * self.reflectance / mu
-#
-#     def get_band(self, band: str):
-#         return MERSIImage(self.file_path, self.geo_path, band)
-#
-#     @classmethod
-#     def between_dates(cls, start: datetime, end: datetime, band: str):
-#         for dt in get_mersi_dates():
-#             if start <= dt <= end:
-#                 yield MERSIImage.from_dt(dt, band)
-
-
-FAST_MODE = True
+LAZY_MODE = True
 
 
 class MERSIImage(SatelliteImage):
@@ -180,13 +75,16 @@ class MERSIImage(SatelliteImage):
         self.sensor_zenith = self.hdf_geo["Geolocation"]["SensorZenith"]      #
         self.sensor_azimuth = self.hdf_geo["Geolocation"]["SensorAzimuth"]    # degrees multiplied by 100 (e.g. 3452 for 34.52 degrees)
         self.solar_zenith = self.hdf_geo["Geolocation"]["SolarZenith"]        #
+        self.solar_azimuth = self.hdf_geo["Geolocation"]["SolarAzimuth"]      #
 
-        if not FAST_MODE:
+        if not LAZY_MODE:
             self.latitude = self.latitude[:]
             self.longitude = self.longitude[:]
             self.sensor_zenith = self.sensor_zenith[:]
             self.sensor_azimuth = self.sensor_azimuth[:]
             self.solar_zenith = self.solar_zenith[:]
+            self.solar_zenith = self.solar_zenith[:]
+            self.solar_azimuth = self.solar_azimuth[:]
 
         date_str = self.hdf.attrs["Observing Beginning Date"].decode()
         time_str = self.hdf.attrs["Observing Beginning Time"].decode().split(".")[0]
@@ -200,7 +98,7 @@ class MERSIImage(SatelliteImage):
         # Fix broken pixels
         self.counts[self.counts == 65535] = 0
 
-        self.vis_cal = self.hdf["Calibration"]["VIS_Cal_Coeff"][:]
+        self.vis_cal = self.hdf["Calibration"]["VIS_Cal_Coeff"][:]  # First 19 bands
         self.blackbody = self.hdf["Calibration"]["BB_DN_average"][band_index + 4]
         self.space_view = self.hdf["Calibration"]["SV_DN_average"][band_index + 4]
         self.voc = self.hdf["Calibration"]["VOC_DN_average"][band_index + 4]
@@ -281,3 +179,15 @@ class MERSIImage(SatelliteImage):
             filename = path.stem
             dts.append(datetime.strptime(filename, fmt))
         return dts
+
+    def cloud_mask(self) -> np.ndarray:
+        fmt = "FY3D_MERSI_ORBT_L2_CLM_MLT_NUL_%Y%m%d_%H%M_1000M_MS.HDF"
+        filename = self.dt.strftime(fmt)
+        file_path = paths.MERSI_CLOUD_MASK_DIR / filename
+        f = h5py.File(file_path)
+        clm = f["Cloud_Mask"][:]
+        # 47 == sun glint
+        # 63 == sea clear
+        # 61 == poss sea clear
+        return clm[0]
+

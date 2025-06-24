@@ -63,12 +63,16 @@ class MODISImage(SatelliteImage):
         self.longitude = self.geo_hdf.select("Longitude")
         self.sensor_zenith = self.geo_hdf.select("SensorZenith")
         self.solar_zenith = self.geo_hdf.select("SolarZenith")
+        self.sensor_azimuth = self.geo_hdf.select("SensorAzimuth")
+        self.solar_azimuth = self.geo_hdf.select("SolarAzimuth")
 
         if not LAZY_MODE:
             self.latitude = self.latitude[:]
             self.longitude = self.longitude[:]
             self.sensor_zenith = self.sensor_zenith[:]
             self.solar_zenith = self.solar_zenith[:]
+            self.sensor_azimuth = self.sensor_azimuth[:]
+            self.solar_azimuth = self.solar_azimuth[:]
 
         RefSB = self.hdf.select("EV_1KM_RefSB")
         self.band_index = MODIS_BANDS.index(band)
@@ -119,13 +123,19 @@ class MODISImage(SatelliteImage):
     def from_dt(dt: datetime, band: str):
         l1b_file_start = dt.strftime("MYD021KM.A%Y%j.%H%M")
         l1b_geo_file_start = dt.strftime("MYD03.A%Y%j.%H%M")
+        cloud_mask_file_start = dt.strftime("MYD35_L2.A%Y%j.%H%M")
         for l1b_filename in os.listdir(MODIS_L1B_DIR):
             if l1b_filename.startswith(l1b_file_start):
                 l1b_path = os.path.join(MODIS_L1B_DIR, l1b_filename)
         for l1b_geo_filename in os.listdir(MODIS_L1B_GEO_DIR):
             if l1b_geo_filename.startswith(l1b_geo_file_start):
                 l1b_geo_path = os.path.join(MODIS_L1B_GEO_DIR, l1b_geo_filename)
-        return MODISImage(l1b_path, l1b_geo_path, band)
+        img = MODISImage(l1b_path, l1b_geo_path, band)
+        for cloud_mask_filename in os.listdir(paths.MODIS_CLOUD_MASK_DIR):
+            if cloud_mask_filename.startswith(cloud_mask_file_start):
+                cloud_mask_path = os.path.join(paths.MODIS_CLOUD_MASK_DIR, cloud_mask_filename)
+                img.load_cloud_mask(cloud_mask_path)
+        return img
 
     @classmethod
     def all_dts(cls) -> list[datetime]:

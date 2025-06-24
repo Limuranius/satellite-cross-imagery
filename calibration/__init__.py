@@ -4,6 +4,7 @@ from . import (
     fix_channel_8,
     fix_channel_12,
     fix_zebra,
+    fix_coefficients
 )
 
 
@@ -12,9 +13,12 @@ def full_correct_image(
         remove_zebra: bool,
         remove_neighbor_influence: bool,
         remove_trace: bool,
+        fix_coeffs: bool,
 ) -> None:
     if remove_zebra:
         fix_zebra.apply_coeffs.correct_mersi_image(image)
+    if fix_coeffs:
+        fix_coefficients.fix_coeffs(image)
     match image.band:
         case "8":
             if remove_neighbor_influence:

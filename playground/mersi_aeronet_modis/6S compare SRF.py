@@ -25,10 +25,17 @@ def atmosphere_correction(
     s.altitudes.set_target_sea_level()
     s.altitudes.set_sensor_satellite_level()
 
+    s.ground_reflectance = GroundReflectance.HomogeneousOcean(
+        0.1,
+        0,
+        -1,
+        5.0)
+    s.atmos_corr = AtmosCorr.AtmosCorrBRDFFromRadiance(rad)
 
     s.run()
     output = s.outputs
 
+    print("ATM:", output.atmospheric_intrinsic_radiance)
     return output.apparent_radiance
     # return output.atmospheric_intrinsic_radiance
 
@@ -50,5 +57,24 @@ az = 261.99
 aot = 0.05045
 rad = 114.92930910444272
 
-print(atmosphere_correction(wv_mersi, lat, lon, dt, zen, az, aot))
-print(atmosphere_correction(wv_modis, lat, lon, dt, zen, az, aot))
+# print(atmosphere_correction(wv_mersi, lat, lon, dt, zen, az, aot))
+# print(atmosphere_correction(wv_modis, lat, lon, dt, zen, az, aot))
+
+# 91.713
+# 91.713
+# ATM: 39.745
+
+
+from Py6S import *
+import numpy as np
+
+from brdf import lazy_lookup
+
+
+print(lazy_lookup.compute_brdf(
+    solar_z=45.0,
+    solar_a=24.0,
+    view_z=25.0,
+    view_a=36.0,
+    mersi_band="10"
+))

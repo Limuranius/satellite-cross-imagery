@@ -7,10 +7,11 @@ import requests
 from dateutil.relativedelta import relativedelta
 from tqdm import tqdm
 
+import paths
 from custom_types import LonLat
 from light_info.MODISInfo import MODISInfo
 
-CSV_PATH = "/home/gleb123/satellite-cross-imagery/light_info/modis_data.csv"
+CSV_PATH = paths.DATA_DIR / "modis_data.csv"
 
 
 def request_between_dates(

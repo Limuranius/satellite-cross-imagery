@@ -10,6 +10,7 @@ def download_mersi_files(
         infos: list[MERSIInfo],
         download_l1=True,
         download_l1_geo=False,
+        download_cloud_mask=False,
         direct_download=False,
 ):
     if direct_download:
@@ -19,11 +20,13 @@ def download_mersi_files(
             if download_l1_geo:
                 NSMC_parser.download_dt(info.dt, NSMC_parser.DataType.L1_GEO)
     else:
-        for info in tqdm(infos, desc="Selecting MERSI-2 images"):
-            if download_l1:
-                NSMC_parser.select_dt(info.dt, NSMC_parser.DataType.L1)
-            if download_l1_geo:
-                NSMC_parser.select_dt(info.dt, NSMC_parser.DataType.L1_GEO)
+        dts = [i.dt for i in infos]
+        if download_l1:
+            NSMC_parser.select_dts(dts, NSMC_parser.DataType.L1)
+        if download_l1_geo:
+            NSMC_parser.select_dts(dts, NSMC_parser.DataType.L1_GEO)
+        if download_cloud_mask:
+            NSMC_parser.select_dts(dts, NSMC_parser.DataType.CLOUD_MASK)
         print("Done selecting MERSI-2 images. Now go and order them at https://satellite.nsmc.org.cn/PortalSite/Data/ShoppingCart.aspx")
 
 

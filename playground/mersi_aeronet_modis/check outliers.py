@@ -5,8 +5,8 @@ import pandas as pd
 import tqdm
 from matplotlib import pyplot as plt
 
+import paths
 from processing.MERSIImage import MERSIImage
-from processing.preprocessing import get_mersi_dates
 import seaborn as sns
 
 
@@ -48,17 +48,10 @@ def process_image(
         color_big[20, 20] = (255, 0, 0)
 
         reflectance13 = band13.reflectance[*area_idx]
-        mask = reflectance13 < 0.03
-        if mask.sum() == 0:  # Есть случаи, когда альбедо >3%, но вода всё равно однородная
-            mask = ~outliers_2d_mask(reflectance13)
-        else:
-            mask = ~outliers_2d_mask(reflectance13) & mask
+        mask = homogeneous_pixels_mask(image, area_idx)
+        if mask is None:
+            mask = np.zeros_like(reflectance13, dtype=bool)
         pixels = reflectance13[mask]
-        if pixels.std() > 0.002:  # Не удалось убрать выбросы, всё убираем
-            mask = np.zeros_like(mask)
-        mask = mask & (reflectance13 < 0.1)  # Не брать однородные облака
-        pixels = reflectance13[mask]
-
 
         _, ax = plt.subplots(ncols=3, nrows=2, figsize=(20, 8))
         sns.heatmap(reflectance13, center=0, annot=True, ax=ax[0, 0], fmt=".3f")
@@ -72,20 +65,22 @@ def process_image(
         plt.savefig(f"cloud_masks/{i}.jpg", dpi=200)
         plt.close()
 
+def outliers_thresholds(data: np.ndarray) -> tuple[float, float]:
+    q1 = np.percentile(data, 25)
+    q3 = np.percentile(data, 75)
+    iqr = q3 - q1
+    threshold = 1.5 * iqr
+    return (q1 - threshold), (q3 + threshold)
+
 def homogeneous_pixels_mask(image: MERSIImage, area_idx):
     band13 = image.get_band("13")
     reflectance13 = band13.reflectance[*area_idx]
-    mask = reflectance13 < 0.03
-    if mask.sum() == 0:  # Есть случаи, когда альбедо >3%, но вода всё равно однородная
-        mask = ~outliers_2d_mask(reflectance13)
-    else:
-        mask = ~outliers_2d_mask(reflectance13) & mask
-    pixels = reflectance13[mask]
-    if pixels.std() > 0.002:
-        return None  # Слишком зашумлено, невозможно убрать выбросы, потому что не понятно, что является выбросом
-    mask = mask & (reflectance13 < 0.1)  # Не брать однородные облака
+    mask = reflectance13 < 0.1  # Альбедо 10% всегда облачность
+    if mask.sum() == 0:
+        return None
+    l, r = outliers_thresholds(reflectance13[mask])
+    mask = mask & (reflectance13 >= l) & (reflectance13 <= r)
     return mask
-
 
 def iterate_rows_timedelta_within_image(image: MERSIImage):
     timedelta = (df["aeronet_t"] - image.dt).abs()
@@ -96,16 +91,13 @@ def iterate_rows_timedelta_within_image(image: MERSIImage):
 
 
 BANDS = ["8"]
-df = pd.read_csv("data.csv", sep="\t")
+df = pd.read_csv(paths.DATA_DIR / "data.csv", sep="\t")
 df["modis_t"] = pd.to_datetime(df["modis_t"], format="mixed")
 df["aeronet_t"] = pd.to_datetime(df["aeronet_t"])
 df = df[df["modis_zenith"].notna()]
 if __name__ == '__main__':
-    mersi_dts = get_mersi_dates()
+    mersi_dts = MERSIImage.all_dts()
     for mersi_dt in tqdm.tqdm(mersi_dts):
         for band in BANDS:
             image = MERSIImage.from_dt(mersi_dt, band)
             process_image(image)
-
-    df = df[df["mersi_t"] == df["mersi_t"]]
-    df.to_csv("data_with_mersi.csv", sep="\t", index=False)

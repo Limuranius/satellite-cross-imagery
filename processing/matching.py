@@ -92,6 +92,10 @@ def filter_matching_pixels(
         rstd_kernel_size: int = 5,
         rstd_threshold: float = 0.1,
         exclude_overflow: bool = False,
+        remove_glint: bool = False,
+        use_clear_sea: bool = False,
+        remove61: bool = False,
+        erosion_size = 5,
 ) -> MatchingPixelsArray:
     mersi_pixels = pixels[:, 0].transpose(1, 0)
     modis_pixels = pixels[:, 1].transpose(1, 0)
@@ -108,8 +112,9 @@ def filter_matching_pixels(
         mask &= zenith_diff_good
 
     if max_zenith:
-        zenith_not_big = zenith_mersi < max_zenith
-        mask &= zenith_not_big
+        mersi_zenith_not_big = zenith_mersi < max_zenith
+        modis_zenith_not_big = zenith_modis < max_zenith
+        mask &= mersi_zenith_not_big & modis_zenith_not_big
 
     if exclude_clouds:
         has_no_clouds = image_modis.cloud_mask[*modis_pixels] == 3
@@ -126,7 +131,7 @@ def filter_matching_pixels(
         for i, ((mersi_i, mersi_j), (modis_i, modis_j)) in enumerate(pixels):
             mask_mersi[mersi_i, mersi_j] = mask[i]
         mask_mersi = mask_mersi.astype(np.uint8) * 255
-        mask_mersi = cv2.erode(mask_mersi, np.ones((5, 5), dtype=np.uint8))
+        mask_mersi = cv2.erode(mask_mersi, np.ones((erosion_size, erosion_size), dtype=np.uint8))
         for i, ((mersi_i, mersi_j), (modis_i, modis_j)) in enumerate(pixels):
             mask[i] = bool(mask_mersi[mersi_i, mersi_j])
     if correct_cloud_movement:
@@ -146,7 +151,34 @@ def filter_matching_pixels(
             mersi_overflow = image_mersi.counts[*mersi_coord] > 4050
             modis_overflow = image_modis.counts[*modis_coord] > 60000
             mask[i] = mask[i] and not mersi_overflow and not modis_overflow
-
+    if remove_glint:
+        try:
+            clm = image_mersi.cloud_mask()
+            # clear_sea_mask = image_mersi.cloud_mask() == 63
+            # not_glint_mask = image_mersi.cloud_mask() != 47
+            # not_glint_mask = ~np.isin(image_mersi.cloud_mask(), [45, 43, 41])
+            not_glint_mask = (clm & 16) != 0
+            for i, (mersi_coord, modis_coord) in enumerate(pixels):
+                mask[i] = mask[i] and not_glint_mask[*mersi_coord]
+        except:
+            print(f"Error: CLM not found. {image_mersi.dt}")
+            mask &= False
+    if use_clear_sea:
+        try:
+            clear_sea_mask = image_mersi.cloud_mask() == 63
+            mask &= clear_sea_mask[*mersi_pixels]
+        except:
+            print(f"Error: CLM not found. {image_mersi.dt}")
+            mask &= False
+    if remove61:
+        try:
+            clm = image_mersi.cloud_mask()
+            mask61 = clm != 61
+            for i, (mersi_coord, modis_coord) in enumerate(pixels):
+                mask[i] = mask[i] and mask61[*mersi_coord]
+        except:
+            print(f"Error: CLM not found. {image_mersi.dt}")
+            mask &= False
     pixels = pixels[mask]
     return pixels
 
@@ -164,11 +196,15 @@ def matching_stats(
     modis_ref = image_modis.reflectance[*modis_pixels]
     mersi_senz = image_mersi.sensor_zenith[*mersi_pixels]
     modis_senz = image_modis.sensor_zenith[*modis_pixels]
+    mersi_sena = image_mersi.sensor_azimuth[*mersi_pixels]
+    modis_sena = image_modis.sensor_azimuth[*modis_pixels]
     mersi_counts = image_mersi.counts[*mersi_pixels]
     modis_counts = image_modis.counts[*modis_pixels]
     mersi_solz = image_mersi.solar_zenith[*mersi_pixels]
     modis_solz = image_modis.solar_zenith[*modis_pixels]
-    mersi_y = modis_pixels[0]
+    mersi_sola = image_mersi.solar_azimuth[*mersi_pixels]
+    modis_sola = image_modis.solar_azimuth[*modis_pixels]
+    mersi_y = mersi_pixels[0]
     sensor = mersi_y % 10
 
     df = pd.DataFrame({
@@ -184,8 +220,12 @@ def matching_stats(
         "modis_solz": modis_solz,
         "mersi_y": mersi_y,
         "sensor": sensor,
+        "mersi_sena": mersi_sena,
+        "modis_sena": modis_sena,
+        "mersi_sola": mersi_sola,
+        "modis_sola": modis_sola,
     })
-    print("Pixels in statistics:", len(df))
+    # print("Pixels in statistics:", len(df))
     return df
 
 
@@ -202,6 +242,8 @@ def aggregated_matching_stats(
         "mersi_rad",
         "modis_rad",
         "mersi_count",
+        "mersi_senz",
+        "modis_senz",
     ], index=range(len(pixels)))
     df_i = 0
 
@@ -209,14 +251,16 @@ def aggregated_matching_stats(
     indices = np.full(shape=(2000, 2048), fill_value=-1, dtype=int)
     indices[*mersi_pixels] = np.arange(len(pixels))
     mersi_radiance = image_mersi.radiance
+    mersi_senz = image_mersi.sensor_zenith
+    modis_senz = image_modis.sensor_zenith
     for mersi_pixel, modis_pixel in tqdm.tqdm(pixels, desc="Aggregating statistics"):
         if not mersi_visited_mask[*mersi_pixel]:
             mersi_i, mersi_j = mersi_pixel
-
             indices_window = indices[
                              mersi_i - kernel_size // 2: mersi_i + kernel_size // 2 + 1,
                              mersi_j - kernel_size // 2: mersi_j + kernel_size // 2 + 1
                              ]
+            # print(indices_window)
 
             window_pixel_indices = indices_window[indices_window != -1]
 
@@ -231,13 +275,19 @@ def aggregated_matching_stats(
             window_modis_rad_mean = window_modis_rad.mean()
             window_mersi_count = image_mersi.counts[*window_mersi_pixels].mean()
 
-            # Filtering windows by rstd
-            mersi_rstd = window_mersi_rad.std() / window_mersi_rad.mean()
-            modis_rstd = window_modis_rad.std() / window_modis_rad.mean()
-            if (mersi_rstd + modis_rstd) / 2 > 0.05:
-                continue
+            # # Filtering windows by rstd
+            # mersi_rstd = window_mersi_rad.std() / window_mersi_rad.mean()
+            # modis_rstd = window_modis_rad.std() / window_modis_rad.mean()
+            # if (mersi_rstd + modis_rstd) / 2 > 0.05:
+            #     continue
 
-            df.loc[df_i] = [window_mersi_rad_mean, window_modis_rad_mean, window_mersi_count]
+            df.loc[df_i] = [
+                window_mersi_rad_mean,
+                window_modis_rad_mean,
+                window_mersi_count,
+                mersi_senz[*window_mersi_pixels].mean(),
+                modis_senz[*window_modis_pixels].mean(),
+            ]
             df_i += 1
     df = df.iloc[0: df_i]
 

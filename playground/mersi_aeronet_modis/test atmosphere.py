@@ -1,4 +1,5 @@
 import datetime
+import multiprocessing
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -35,13 +36,21 @@ def atmosphere_correction(
     s.altitudes.set_target_sea_level()
     s.altitudes.set_sensor_satellite_level()
 
-    s.atmos_corr = AtmosCorr.AtmosCorrBRDFFromRadiance(radiance)
+    s.atmos_profile = AtmosProfile.FromLatitudeAndDate(
+        pixel_lat,
+        dt.date().isoformat(),
+    )
+
+    s.aero_profile = AeroProfile.User(water=0.5, oceanic=0.5)
+
+    s.atmos_corr = AtmosCorr.AtmosCorrLambertianFromRadiance(radiance)
 
     s.run()
     output = s.outputs
-    reflectance_corrected = output.atmos_corrected_reflectance_brdf
+    reflectance_corrected = output.atmos_corrected_reflectance_lambertian
 
     return reflectance_corrected
+
 
 
 srf = [0., 0.01397515, 0.0310559, 0.07298137, 0.11801242,
@@ -51,23 +60,30 @@ srf = [0., 0.01397515, 0.0310559, 0.07298137, 0.11801242,
 start = 0.4185
 end = 0.466
 dt = datetime.datetime(2019, 1, 14, 11, 25)
-lonlat1 = (28.187548, 43.039566)
-lonlat2 = (29.36602, 44.605766)
-zen1 = 30.66
-az1 = 261.99
-zen2 = 37.81
-az2 = 262.95
-aot1 = 0.05045
-aot2 = 0.051567
-rad1 = 114.92930910444272
-rad2 = 197.32263197355002
+lonlat = (28.187548, 43.039566)
+zen = 30.66
+az = 261.99
+aot = 0.05045
+rad = 114.92930910444272
 
-# print(atmosphere_correction(rad1, start, end, srf, lonlat1[1], lonlat1[0], dt, zen1, az1, aot1))
-# print(atmosphere_correction(rad2, start, end, srf, lonlat2[1], lonlat2[0], dt, zen2, az2, aot2))
+print(atmosphere_correction(
+    radiance=rad,
+    start_wavelength=start,
+    end_wavelength=end,
+    srf=srf,
+    pixel_lat=lonlat[1],
+    pixel_lon=lonlat[0],
+    dt=dt,
+    view_zenith=zen,
+    view_azimuth=az,
+    aot550=aot
+))
 
-refl = []
-for rad in np.linspace(rad1, rad2, 20):
-    refl.append(atmosphere_correction(rad, start, end, srf, lonlat1[1], lonlat1[0], dt, zen1, az1, aot1))
+# 0.42379
+# 0.4243
 
-plt.plot(refl)
-plt.show()
+# refl = []
+# for rad in np.linspace(rad1, rad2, 20):
+#     refl.append(atmosphere_correction(rad, start, end, srf, lonlat1[1], lonlat1[0], dt, zen1, az1, aot1))
+# plt.plot(refl)
+# plt.show()

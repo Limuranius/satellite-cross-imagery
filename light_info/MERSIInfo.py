@@ -63,17 +63,18 @@ class MERSIInfo(Info):
         responses = web.NSMC_parser.get_many_metadatas(dts)
         result = []
         for dt, data in responses:
-            if int(data["datasize"]) == 0:
+            print(dt, data)
+            if data is None:
                 result.append(dt)
                 continue
             result.append(MERSIInfo(
-                p1=(float(data["longitudewn"]), float(data["latitudewn"])),
-                p2=(float(data["longitudeen"]), float(data["latitudeen"])),
-                p3=(float(data["longitudees"]), float(data["latitudees"])),
-                p4=(float(data["longitudews"]), float(data["latitudews"])),
+                p1=(float(data["LONGITUDEWN"]), float(data["LATITUDEWN"])),
+                p2=(float(data["LONGITUDEEN"]), float(data["LATITUDEEN"])),
+                p3=(float(data["LONGITUDEES"]), float(data["LATITUDEES"])),
+                p4=(float(data["LONGITUDEWS"]), float(data["LATITUDEWS"])),
                 dt=dt,
                 satellite="FY-3D",
-                filename=data["archivename"],
+                filename=data["ARCHIVENAME"],
             ))
         return result
 
