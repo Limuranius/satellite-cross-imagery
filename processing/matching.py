@@ -1,18 +1,67 @@
 import os.path
-import pickle
 
-import matplotlib.pyplot as plt
+import cv2
 import numpy as np
 import pandas as pd
 import tqdm
 from global_land_mask import globe
-import cv2
 
 import paths
 from custom_types import MatchingPixelsArray
 from processing.MERSIImage import MERSIImage
 from processing.MODISImage import MODISImage
 from processing.std_map import load_rstd_map
+
+MERSI_MATCHING_INFO = {
+    "8": {
+        "modis_band": "8",
+        "mersi_wl": 412,
+        "modis_wl": 412,
+        "aeronet_wl": 412,
+    },
+    "9": {
+        "modis_band": "9",
+        "mersi_wl": 443,
+        "modis_wl": 443,
+        "aeronet_wl": 443,
+    },
+    "10": {
+        "modis_band": "10",
+        "mersi_wl": 490,
+        "modis_wl": 488,
+        "aeronet_wl": 490,
+    },
+    "11": {
+        "modis_band": "12",
+        "mersi_wl": 555,
+        "modis_wl": 547,
+        "aeronet_wl": 560,
+    },
+    "12": {
+        "modis_band": "13lo",
+        "mersi_wl": 670,
+        "modis_wl": 667,
+        "aeronet_wl": 667,
+    },
+    # "13": {
+    #     "modis_band": "14lo",
+    #     "mersi_wl": 709,
+    #     "modis_wl": 748,
+    #     "aeronet_wl": 681,
+    # }
+    "14": {
+        "modis_band": "15",
+        "mersi_wl": 746,
+        "modis_wl": 748,
+        "aeronet_wl": 779,
+    },
+    "15": {
+        "modis_band": "16",
+        "mersi_wl": 865,
+        "modis_wl": 869,
+        "aeronet_wl": 865,
+    },
+}
 
 
 def get_matching_pixels(
@@ -95,7 +144,7 @@ def filter_matching_pixels(
         remove_glint: bool = False,
         use_clear_sea: bool = False,
         remove61: bool = False,
-        erosion_size = 5,
+        erosion_size=5,
 ) -> MatchingPixelsArray:
     mersi_pixels = pixels[:, 0].transpose(1, 0)
     modis_pixels = pixels[:, 1].transpose(1, 0)
@@ -297,4 +346,3 @@ def aggregated_matching_stats(
 
     print("Pixels in statistics:", len(df))
     return df
-

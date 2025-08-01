@@ -12,7 +12,7 @@ from .SatelliteImage import SatelliteImage
 
 
 MODIS_BANDS = ["8", "9", "10", "11", "12", "13lo", "13hi", "14lo", "14hi", "15", "16", "17", "18", "19", "26"]
-BANDS_WAVELEN = {
+MODIS_BANDS_WAVELEN = {
     "8": 412,
     "9": 443,
     "10": 488,
@@ -31,7 +31,7 @@ BANDS_WAVELEN = {
 }
 
 
-LAZY_MODE = False
+LAZY_MODE = True
 
 
 class MODISImage(SatelliteImage):
@@ -55,7 +55,7 @@ class MODISImage(SatelliteImage):
         self.satellite_name = "AQUA"
         self.file_path = file_path
         self.band = band
-        self.wavelength = BANDS_WAVELEN[band]
+        self.wavelength = MODIS_BANDS_WAVELEN[band]
         self.hdf = SD(file_path)
         self.geo_hdf = SD(geo_path)
 

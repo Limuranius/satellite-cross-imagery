@@ -2,6 +2,7 @@ import os.path
 
 import numpy as np
 from scipy.interpolate import interp1d
+from Py6S import Wavelength
 
 
 def get_band(band: int) -> np.ndarray:
@@ -16,3 +17,18 @@ def range_srf(band: int, start, end, step):
     values = get_band(band)
     srf = interp1d(values[:, 0], values[:, 1])
     return np.array([grid, srf(grid)]).T
+
+
+MERSI_6S_WV = {}
+for band in range(1, 20):
+    srf = get_band(int(band))
+    min_wl = srf[0, 0]
+    max_wl = srf[-1, 0]
+    srf_grid = range_srf(int(band), min_wl, max_wl, 2.5)
+    max_wl = srf_grid[-1, 0]
+    wl = Wavelength(
+        start_wavelength=min_wl / 1000,
+        end_wavelength=max_wl / 1000,
+        filter=srf_grid[:, 1],
+    )
+    MERSI_6S_WV[str(band)] = wl

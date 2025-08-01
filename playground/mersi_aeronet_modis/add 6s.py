@@ -21,7 +21,7 @@ df = df[df["modis_zenith"].notna()]
 
 
 for band in tqdm.tqdm(results):
-    wl = processing.MERSIImage.BANDS_WAVELEN[band]
+    wl = processing.MERSIImage.MERSI_BANDS_WAVELEN[band]
     for r in results[band]:
         mersi_t = r["mersi_t"]
         aeronet_t = r["aeronet_t"]

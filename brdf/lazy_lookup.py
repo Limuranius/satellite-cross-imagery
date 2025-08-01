@@ -10,32 +10,6 @@ import paths
 # Loading all wavelength to Py6S format
 import SRF.mersi_2_srf
 
-MERSI_WV = {}
-for band in range(1, 20):
-    srf = SRF.mersi_2_srf.get_band(int(band))
-    min_wl = srf[0, 0]
-    max_wl = srf[-1, 0]
-    srf_grid = SRF.mersi_2_srf.range_srf(int(band), min_wl, max_wl, 2.5)
-    max_wl = srf_grid[-1, 0]
-    wl = Wavelength(
-        start_wavelength=min_wl / 1000,
-        end_wavelength=max_wl / 1000,
-        filter=srf_grid[:, 1],
-    )
-    MERSI_WV[str(band)] = wl
-
-MODIS_WV = {
-    "8": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_8),
-    "9": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_9),
-    "10": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_10),
-    "11": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_11),
-    "12": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_12),
-    "13lo": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_13),
-    "14lo": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_14),
-    "15": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_15),
-    "16": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_16),
-}
-
 MAX_DIST_TO_LOOKUP = 0.25
 
 # Loading tables

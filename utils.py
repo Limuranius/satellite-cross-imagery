@@ -90,8 +90,8 @@ def linregress_report(
         x,
         y,
         use_intercept=False,
-        round_slope=2,
-        round_intercept=2,
+        round_slope=5,
+        round_intercept=5,
 ):
     if use_intercept:
         x = sm.add_constant(x)

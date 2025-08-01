@@ -43,10 +43,13 @@ def atmosphere_correction(
 
     s.aero_profile = AeroProfile.User(water=0.5, oceanic=0.5)
 
-    s.atmos_corr = AtmosCorr.AtmosCorrLambertianFromRadiance(radiance)
+    s.atmos_corr = AtmosCorr.AtmosCorrBRDFFromRadiance(radiance)
 
     s.run()
     output = s.outputs
+
+    # print(output.apparent_radiance)
+
     reflectance_corrected = output.atmos_corrected_reflectance_lambertian
 
     return reflectance_corrected
@@ -67,7 +70,7 @@ aot = 0.05045
 rad = 114.92930910444272
 
 print(atmosphere_correction(
-    radiance=rad,
+    radiance=rad / 10,
     start_wavelength=start,
     end_wavelength=end,
     srf=srf,

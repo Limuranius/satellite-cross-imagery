@@ -12,7 +12,7 @@ from paths import MERSI_L1_DIR, MERSI_L1_GEO_DIR
 from .SatelliteImage import SatelliteImage
 
 MERSI_2_BANDS = ["5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"]
-BANDS_WAVELEN = {
+MERSI_BANDS_WAVELEN = {
     "5": 1380,
     "6": 1640,
     "7": 2130,
@@ -63,7 +63,7 @@ class MERSIImage(SatelliteImage):
     def __init__(self, file_path: str, geo_path: str, band: str):
         self.satellite_name = "FY-3D"
         self.band = band
-        self.wavelength = BANDS_WAVELEN[band]
+        self.wavelength = MERSI_BANDS_WAVELEN[band]
         self.file_path = file_path
         self.geo_path = geo_path
 
@@ -76,6 +76,11 @@ class MERSIImage(SatelliteImage):
         self.sensor_azimuth = self.hdf_geo["Geolocation"]["SensorAzimuth"]    # degrees multiplied by 100 (e.g. 3452 for 34.52 degrees)
         self.solar_zenith = self.hdf_geo["Geolocation"]["SolarZenith"]        #
         self.solar_azimuth = self.hdf_geo["Geolocation"]["SolarAzimuth"]      #
+
+        band_index = MERSI_2_BANDS.index(band)
+        self.counts = self.hdf["Data"]["EV_1KM_RefSB"][band_index].astype(int)
+        # Fix broken pixels
+        self.counts[self.counts == 65535] = 0
 
         if not LAZY_MODE:
             self.latitude = self.latitude[:]
@@ -91,12 +96,6 @@ class MERSIImage(SatelliteImage):
         date = datetime.strptime(date_str, "%Y-%m-%d").date()
         time = datetime.strptime(time_str, "%H:%M:%S").time()
         self.dt = datetime.combine(date, time)
-
-        band_index = MERSI_2_BANDS.index(band)
-        self.counts = self.hdf["Data"]["EV_1KM_RefSB"][band_index].astype(int)
-
-        # Fix broken pixels
-        self.counts[self.counts == 65535] = 0
 
         self.vis_cal = self.hdf["Calibration"]["VIS_Cal_Coeff"][:]  # First 19 bands
         self.blackbody = self.hdf["Calibration"]["BB_DN_average"][band_index + 4]
@@ -161,6 +160,11 @@ class MERSIImage(SatelliteImage):
         solz = np.radians(self.solar_zenith / 100)
         mu = np.cos(solz)
         return self.D ** 2 * self.reflectance / mu
+
+    def apparent_reflectance_slice(self, idx_2d):
+        solz = np.radians(self.solar_zenith[*idx_2d] / 100)
+        mu = np.cos(solz)
+        return self.D ** 2 * self.reflectance_slice(idx_2d) / mu
 
     def get_band(self, band: str):
         return MERSIImage(self.file_path, self.geo_path, band)

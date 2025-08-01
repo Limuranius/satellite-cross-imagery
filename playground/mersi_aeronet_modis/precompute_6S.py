@@ -5,54 +5,18 @@ import pickle
 import numpy as np
 import pandas as pd
 import tqdm
-from Py6S import *
+from processing.algorithms import atmosphere_correction
 
 import paths
-from processing.MERSIImage import MERSIImage
+from processing.MERSIImage import MERSIImage, MERSI_BANDS_WAVELEN
+from processing.MODISImage import MODIS_BANDS_WAVELEN, MODISImage
 import SRF.mersi_2_srf
+import SRF.modis_aqua_srf
 
 
-def atmosphere_correction(
-        start_wavelength: float,  # micrometers
-        end_wavelength: float,  # micrometers
-        srf: list[float],  # srf for wavelength from start to end with 2.5 nm step
-        pixel_lat: float,
-        pixel_lon: float,
-        dt: datetime.datetime,
-        view_zenith: float,  # degrees
-        view_azimuth: float,  # degrees
-        aot550: float,
-        wind_speed: float,
-        chlorophyll: float,
-):
-    s = SixS()
-    s.wavelength = Wavelength(
-        start_wavelength=start_wavelength,
-        end_wavelength=end_wavelength,
-        filter=srf
-    )
-    s.geometry = Geometry.User()
-    s.geometry.from_time_and_location(
-        lat=pixel_lat,
-        lon=pixel_lon,
-        datetimestring=dt.isoformat(),
-        view_z=view_zenith,
-        view_a=view_azimuth,
-    )
-    s.aot550 = aot550
-    s.altitudes.set_target_sea_level()
-    s.altitudes.set_sensor_satellite_level()
-    s.atmos_profile = AtmosProfile.FromLatitudeAndDate(pixel_lat, dt.date().isoformat())
-    s.ground_reflectance = GroundReflectance.HomogeneousOcean(
-        wind_speed=wind_speed,
-        wind_azimuth=0,
-        salinity=-1,
-        pigment_concentration=chlorophyll,
-    )
-
-    s.run()
-    output = s.outputs
-    return output
+import processing
+processing.MODISImage.LAZY_MODE = True
+processing.MERSIImage.LAZY_MODE = True
 
 
 def outliers_thresholds(data: np.ndarray) -> tuple[float, float]:
@@ -85,15 +49,10 @@ def homogeneous_pixels_mask(image: MERSIImage, area_idx):
     return mask
 
 
-
-class Precompute6S:
-    mersi_dts: list[datetime.datetime]
-    mersi_bands: list[str]
+class TablePrecompute:
     df: pd.DataFrame
 
-    def __init__(self, mersi_dts, mersi_bands, df):
-        self.mersi_dts = mersi_dts
-        self.mersi_bands = mersi_bands
+    def __init__(self, df):
         self.df = df
 
     def iterate_rows_timedelta_within_image(self, image: MERSIImage):
@@ -103,18 +62,113 @@ class Precompute6S:
             if image.contains_pos(row["aeronet_lon"], row["aeronet_lat"]):
                 yield i, row
 
-    def get_6S_output(
+    def add_mersi_info(self, mersi_dts: list[datetime.datetime], filter_na=True) -> None:
+        for mersi_dt in tqdm.tqdm(mersi_dts, desc="Adding MERSI info"):
+            image = MERSIImage.from_dt(mersi_dt, "8")
+            for i, row in self.iterate_rows_timedelta_within_image(image):
+                site_i, site_j = image.get_closest_pixel(row["aeronet_lon"], row["aeronet_lat"])
+                self.df.loc[i, "mersi_t"] = mersi_dt
+                self.df.loc[i, "mersi_minutes_diff_aeronet"] = (image.dt - row["aeronet_t"]).total_seconds() // 60
+                self.df.loc[i, "mersi_minutes_diff_modis"] = (image.dt - row["modis_t"]).total_seconds() // 60
+                self.df.loc[i, "mersi_senz"] = image.sensor_zenith[site_i, site_j] / 100
+                self.df.loc[i, "mersi_sena"] = image.sensor_azimuth[site_i, site_j] / 100
+                self.df.loc[i, "mersi_solz"] = image.solar_zenith[site_i, site_j] / 100
+                self.df.loc[i, "mersi_sola"] = image.solar_azimuth[site_i, site_j] / 100
+                self.df.loc[i, "mersi_lat"] = image.latitude[site_i, site_j]
+                self.df.loc[i, "mersi_lon"] = image.longitude[site_i, site_j]
+
+        if filter_na:
+            self.df = self.df[self.df["mersi_t"].notna()]
+
+    def add_modis_geometry(self) -> None:
+        pass
+
+    def add_mersi_areas(self, mersi_bands: list[str], filter_na=True) -> None:
+        for band in mersi_bands:
+            wl = MERSI_BANDS_WAVELEN[band]
+            self.df[f"mersi_counts[{wl}nm]"] = None
+            self.df[f"mersi_radiance[{wl}nm]"] = None
+            self.df[f"mersi_reflectance[{wl}nm]"] = None
+            self.df[f"mersi_apparent_reflectance[{wl}nm]"] = None
+        self.df["mersi_mask"] = None
+
+        for i, row in tqdm.tqdm(self.df.iterrows(), desc="Adding MERSI areas", total=len(self.df)):
+            mersi_dt = row["mersi_t"]
+            for band in mersi_bands:
+                image = MERSIImage.from_dt(mersi_dt, band)
+                wl = image.wavelength
+                site_i, site_j = image.get_closest_pixel(row["aeronet_lon"], row["aeronet_lat"])
+
+                # Вырезаем окно вокруг станции
+                radius = 2
+                area_idx = [
+                    slice(max(0, site_i - radius), site_i + radius + 1),
+                    slice(max(0, site_j - radius), site_j + radius + 1),
+                ]
+
+                good_pixels_mask = homogeneous_pixels_mask(image, area_idx)
+                if good_pixels_mask is None:
+                    continue
+
+                counts = image.counts[*area_idx][:].copy()
+                radiance = image.radiance_slice(area_idx)[:].copy()
+                reflectance = image.reflectance_slice(area_idx)[:].copy()
+                apparent_reflectance = image.apparent_reflectance_slice(area_idx)[:].copy()
+
+                values = self.df.loc[i].to_dict()
+                values.update({
+                    "mersi_mask": good_pixels_mask,
+                    f"mersi_counts[{wl}nm]": counts,
+                    f"mersi_radiance[{wl}nm]": radiance,
+                    f"mersi_reflectance[{wl}nm]": reflectance,
+                    f"mersi_apparent_reflectance[{wl}nm]": apparent_reflectance,
+                })
+                self.df.loc[i] = values
+
+                self.df.loc[i, f"mersi_n_good_pixels"] = good_pixels_mask.sum()
+                self.df.loc[i, f"mersi_counts_mean[{wl}nm]"] = counts[good_pixels_mask].mean()
+                self.df.loc[i, f"mersi_counts_std[{wl}nm]"] = counts[good_pixels_mask].std()
+                self.df.loc[i, f"mersi_radiance_mean[{wl}nm]"] = radiance[good_pixels_mask].mean()
+                self.df.loc[i, f"mersi_radiance_std[{wl}nm]"] = radiance[good_pixels_mask].std()
+                self.df.loc[i, f"mersi_reflectance_mean[{wl}nm]"] = reflectance[good_pixels_mask].mean()
+                self.df.loc[i, f"mersi_reflectance_std[{wl}nm]"] = reflectance[good_pixels_mask].std()
+                self.df.loc[i, f"mersi_apparent_reflectance_mean[{wl}nm]"] = apparent_reflectance[good_pixels_mask].mean()
+                self.df.loc[i, f"mersi_apparent_reflectance_std[{wl}nm]"] = apparent_reflectance[good_pixels_mask].std()
+
+        if filter_na:
+            self.df = self.df[self.df["mersi_counts_mean[412nm]"].notna()]
+
+    def add_mersi_6S(self, mersi_bands: list[str]) -> None:
+        for band in mersi_bands:
+            wl = MERSI_BANDS_WAVELEN[band]
+            self.df[f"mersi_6S[{wl}nm]"] = None
+        for i, row in tqdm.tqdm(self.df.iterrows(), desc="Adding MERSI 6S", total=len(self.df)):
+            for band in mersi_bands:
+                wl = MERSI_BANDS_WAVELEN[band]
+                image = MERSIImage.from_dt(row["mersi_t"], band)
+                out = self._get_mersi_6S_output(row, image)
+                values = self.df.loc[i].to_dict()
+                values.update({f"mersi_6S[{wl}nm]": out.__dict__})
+                self.df.loc[i] = values
+
+    def add_modis_6S(self, modis_bands: list[str]) -> None:
+        for band in modis_bands:
+            wl = MODIS_BANDS_WAVELEN[band]
+            self.df[f"modis_6S[{wl}nm]"] = None
+        for i, row in tqdm.tqdm(self.df.iterrows(), desc="Adding MODIS 6S", total=len(self.df)):
+            for band in modis_bands:
+                wl = MODIS_BANDS_WAVELEN[band]
+                out = self._get_modis_6S_output(row, band)
+                values = self.df.loc[i].to_dict()
+                values.update({f"modis_6S[{wl}nm]": out.__dict__})
+                self.df.loc[i] = values
+
+    def _get_mersi_6S_output(
             self,
             row: pd.Series,
             image: MERSIImage,
-            band: str
     ):
         site_i, site_j = image.get_closest_pixel(row["aeronet_lon"], row["aeronet_lat"])
-        srf = SRF.mersi_2_srf.get_band(int(band))
-        min_wl = srf[0, 0]
-        max_wl = srf[-1, 0]
-        srf_grid = SRF.mersi_2_srf.range_srf(int(band), min_wl, max_wl, 2.5)
-        max_wl = srf_grid[-1, 0]
         aot550 = row["aeronet_Aerosol_Optical_Depth[551nm]"]
         if aot550 != aot550:
             aot550 = row["aeronet_Aerosol_Optical_Depth[555nm]"]
@@ -122,9 +176,8 @@ class Precompute6S:
             aot550 = row["aeronet_Aerosol_Optical_Depth[560nm]"]
 
         out = atmosphere_correction(
-            start_wavelength=min_wl / 1000,
-            end_wavelength=max_wl / 1000,
-            srf=srf_grid[:, 1],
+            radiance=row[f"mersi_radiance_mean[{image.wavelength}nm]"],
+            wavelength=SRF.mersi_2_srf.MERSI_6S_WV[image.band],
             pixel_lat=image.latitude[site_i, site_j],
             pixel_lon=image.longitude[site_i, site_j],
             dt=image.dt,
@@ -132,85 +185,66 @@ class Precompute6S:
             view_azimuth=image.sensor_azimuth[site_i, site_j] / 100,
             aot550=aot550,
             wind_speed=row["aeronet_Wind_Speed(m/s)"],
-            chlorophyll=row["aeronet_Chlorophyll-a"],
+            chlorophyll=row["aeronet_chlor_a_from_rrs"],
         )
         return out
 
-    def process(self):
-        results = collections.defaultdict(list)  # MERSI band: (mersi_t, aeronet_t, 6S_output)
+    def _get_modis_6S_output(
+            self,
+            row: pd.Series,
+            band: str,
+    ):
+        aot550 = row["aeronet_Aerosol_Optical_Depth[551nm]"]
+        if aot550 != aot550:
+            aot550 = row["aeronet_Aerosol_Optical_Depth[555nm]"]
+        if aot550 != aot550:
+            aot550 = row["aeronet_Aerosol_Optical_Depth[560nm]"]
 
-        for mersi_dt in tqdm.tqdm(mersi_dts):
-            for band in BANDS:
-                image = MERSIImage.from_dt(mersi_dt, band)
-                for i, row in self.iterate_rows_timedelta_within_image(image):
-                    out = self.get_6S_output(row, image, band)
-                    results[band].append({
-                        "mersi_t": image.dt,
-                        "aeronet_t": row["aeronet_t"].to_pydatetime(),
-                        "6S_output": out.__dict__,
-                    })
-        return results
+        out = atmosphere_correction(
+            radiance=row[f"nir_Lt_{MODIS_BANDS_WAVELEN[band]}_mean"],
+            wavelength=SRF.modis_aqua_srf.MODIS_6S_WV[band],
+            pixel_lat=row["aeronet_lat"],
+            pixel_lon=row["aeronet_lon"],
+            dt=row["modis_t"],
+            view_zenith=row["modis_zenith"],
+            view_azimuth=row["modis_azimuth"],
+            aot550=aot550,
+            wind_speed=row["aeronet_Wind_Speed(m/s)"],
+            chlorophyll=row["aeronet_chlor_a_from_rrs"],
+        )
+        return out
 
-    def add_mersi_to_table(self):
-        for mersi_dt in tqdm.tqdm(mersi_dts):
-            for band in BANDS:
-                image = MERSIImage.from_dt(mersi_dt, band)
-                for i, row in self.iterate_rows_timedelta_within_image(image):
-                    site_i, site_j = image.get_closest_pixel(row["aeronet_lon"], row["aeronet_lat"])
+    def save(self, path: str) -> None:
+        with open(path, "wb") as file:
+            pickle.dump(self.df, file)
 
-                    # Вырезаем окно вокруг станции
-                    radius = 2
-                    area_idx = [
-                        slice(max(0, site_i - radius), site_i + radius + 1),
-                        slice(max(0, site_j - radius), site_j + radius + 1),
-                    ]
+    @classmethod
+    def load(cls, path: str):
+        df = pd.read_pickle(path)
+        return cls(df)
 
-                    good_pixels_mask = homogeneous_pixels_mask(image, area_idx)
-                    if good_pixels_mask is None:
-                        continue
-
-                    counts = image.counts[*area_idx][good_pixels_mask]
-                    radiance = image.radiance_slice(area_idx)[good_pixels_mask]
-                    reflectance = image.reflectance_slice(area_idx)[good_pixels_mask]
-                    # apparent_reflectance = image.apparent_reflectance[*area_idx][good_pixels_mask]
-
-                    wl = image.wavelength
-                    df.loc[i, f"mersi_n_good_pixels"] = good_pixels_mask.sum()
-                    df.loc[i, f"mersi_minutes_diff_aeronet"] = (image.dt - row["aeronet_t"]).total_seconds() // 60
-                    df.loc[i, f"mersi_minutes_diff_modis"] = (image.dt - row["modis_t"]).total_seconds() // 60
-                    df.loc[i, f"mersi_t"] = image.dt.isoformat()
-                    df.loc[i, f"mersi_sensor_zenith_deg"] = image.sensor_zenith[site_i, site_j] / 100
-                    df.loc[i, f"mersi_sensor_azimuth_deg"] = image.sensor_azimuth[site_i, site_j] / 100
-                    df.loc[i, f"mersi_solar_zenith_deg"] = image.solar_zenith[site_i, site_j] / 100
-                    df.loc[i, f"mersi_lat"] = image.latitude[site_i, site_j]
-                    df.loc[i, f"mersi_lon"] = image.longitude[site_i, site_j]
-                    df.loc[i, f"mersi_counts[{wl}nm]"] = counts.mean()
-                    df.loc[i, f"mersi_counts_std[{wl}nm]"] = counts.std()
-                    df.loc[i, f"mersi_radiance[{wl}nm]"] = radiance.mean()
-                    df.loc[i, f"mersi_radiance_std[{wl}nm]"] = radiance.std()
-                    df.loc[i, f"mersi_reflectance[{wl}nm]"] = reflectance.mean()
-                    # df.loc[i, f"mersi{suffix}_reflectance_std[{wl}nm]"] = reflectance.std()
-                    # df.loc[i, f"mersi{suffix}_apparent_reflectance[{wl}nm]"] = apparent_reflectance.mean()
-                    # df.loc[i, f"mersi{suffix}_apparent_reflectance_std[{wl}nm]"] = apparent_reflectance.std()
 
 if __name__ == '__main__':
     INPUT_PATH = paths.DATA_DIR / "data.csv"
-    OUTPUT_PATH = paths.DATA_DIR / "data_with_mersi_2.csv"
+    OUTPUT_PATH = paths.DATA_DIR / "data_with_mersi.pickle"
 
     df = pd.read_csv(INPUT_PATH, sep="\t")
     df["modis_t"] = pd.to_datetime(df["modis_t"], format="mixed")
     df["aeronet_t"] = pd.to_datetime(df["aeronet_t"])
     df = df[df["modis_zenith"].notna()]
+    p = TablePrecompute(df)
     mersi_dts = MERSIImage.all_dts()
-    BANDS = [
-        "8", "9", "10", "11", "12", "13", "14", "15", "16",
-    ]
-    p = Precompute6S(mersi_dts, BANDS, df)
-    # results = p.process()
-    p.add_mersi_to_table()
+    MERSI_BANDS = ["8", "9", "10", "11", "12", "13", "14", "15"]
+    MODIS_BANDS = ["8", "9", "10", "11", "12", "13lo", "14lo", "15", "16"]
 
-    df = df[df["mersi_t"] == df["mersi_t"]]
-    df.to_csv(OUTPUT_PATH, sep="\t", index=False)
+    p.add_mersi_info(mersi_dts, filter_na=True)
+    p.save(OUTPUT_PATH)
 
-    # with open("atmosphere.pkl", "wb") as file:
-    #     pickle.dump(results, file)
+    p.add_mersi_areas(MERSI_BANDS, filter_na=True)
+    p.save(OUTPUT_PATH)
+
+    p.add_mersi_6S(MERSI_BANDS)
+    p.save(OUTPUT_PATH)
+
+    p.add_modis_6S(MODIS_BANDS)
+    p.save(OUTPUT_PATH)

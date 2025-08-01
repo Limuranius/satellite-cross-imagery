@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.interpolate import interp1d
+from Py6S import Wavelength, PredefinedWavelengths
 
 
 def get_band(band: int) -> pd.DataFrame:
@@ -22,3 +23,15 @@ def interp_srf(band: int, step):
     srf_interp = interp1d(srf["Wavelength"], srf["RSR"])
     return np.array([grid, srf_interp(grid)]).T
 
+
+MODIS_6S_WV = {
+    "8": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_8),
+    "9": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_9),
+    "10": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_10),
+    "11": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_11),
+    "12": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_12),
+    "13lo": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_13),
+    "14lo": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_14),
+    "15": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_15),
+    "16": Wavelength(PredefinedWavelengths.ACCURATE_MODIS_AQUA_16),
+}
