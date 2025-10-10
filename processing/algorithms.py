@@ -1,4 +1,7 @@
 import datetime
+import os.path
+import pickle
+from collections import defaultdict
 
 import numpy as np
 import tqdm
@@ -33,6 +36,8 @@ def chl_oc3(rrs, coeffs=MODIS_OC3_COEFFS):
             coeffs[3] * np.log10(max_blue / rrs[2]) ** 3 +
             coeffs[4] * np.log10(max_blue / rrs[2]) ** 4
     )
+
+    # f(x) = 10 ^ (a0 + a1 * log10(x) + a2 * log10(x) ^ 2 + a3 * log10(x) ^ 3 + a4 * log10(x) ^ 4)
 
 
 def chl_oc4(rrs, coeffs=MODIS_OC4_COEFFS):
@@ -121,6 +126,7 @@ def atmosphere_correction(
 
     s.run()
     output = s.outputs
+
     return output
 
 
@@ -138,6 +144,11 @@ def calculate_mersi_chlor_with_6S(
         wind_speed: np.ndarray,
         chlorophyll: np.ndarray,
 ):
+    if not os.path.exists("cache.pickle"):
+        cache = dict()
+    else:
+        cache = pickle.load(open("cache.pickle", "rb"))
+
     import SRF.mersi_2_srf
     h, w = radiance443.shape
     result = np.zeros_like(radiance443)
@@ -146,6 +157,11 @@ def calculate_mersi_chlor_with_6S(
         for j in range(w):
             if not mask[i, j]:
                 result[i, j] = np.nan
+                continue
+            coord = (latitude[i, j], longitude[i, j])
+            if coord in cache:
+                result[i, j] = cache[coord]
+                pbar.update(1)
                 continue
             rrs = []
             for mersi_band, band_radiance in zip(
@@ -166,62 +182,56 @@ def calculate_mersi_chlor_with_6S(
                 )
                 rrs.append(out.atmos_corrected_reflectance_brdf / np.pi)
             result[i, j] = chl_oc3(rrs)
+            cache[coord] = chl_oc3(rrs)
+            with open("cache.pickle", "wb") as file:
+                pickle.dump(cache, file)
             pbar.update(1)
     return result
 
 
 def func(
-        idx,
-        w, mask, radiance443, radiance490, radiance555,
-        latitude, longitude, dt, sen_zen, sen_az, aot550, wind_speed, chlorophyll
+        args
 ):
-    i = idx // w
-    j = idx % w
-    print("aaa")
-    if not mask[i, j]:
-        return np.nan
+    idx = args[0]
+    kwargs = args[1]
+
+    i = idx // kwargs["w"]
+    j = idx % kwargs["w"]
+    if not kwargs["mask"][i, j]:
+        return np.nan, [np.nan, np.nan, np.nan]
     rrs = []
 
     for mersi_band, band_radiance in zip(
             ["9", "10", "11"],
-            [radiance443, radiance490, radiance555],
+            [kwargs["radiance443"], kwargs["radiance490"], kwargs["radiance555"]],
     ):
         out = atmosphere_correction(
             radiance=band_radiance[i, j],
             wavelength=SRF.mersi_2_srf.MERSI_6S_WV[mersi_band],
-            pixel_lat=latitude[i, j],
-            pixel_lon=longitude[i, j],
-            dt=dt,
-            view_zenith=sen_zen[i, j],
-            view_azimuth=sen_az[i, j],
-            aot550=aot550[i, j],
-            wind_speed=wind_speed[i, j],
-            chlorophyll=chlorophyll[i, j],
+            pixel_lat=kwargs["latitude"][i, j],
+            pixel_lon=kwargs["longitude"][i, j],
+            dt=kwargs["dt"],
+            view_zenith=kwargs["sen_zen"][i, j],
+            view_azimuth=kwargs["sen_az"][i, j],
+            aot550=kwargs["aot550"][i, j],
+            wind_speed=kwargs["wind_speed"][i, j],
+            chlorophyll=kwargs["chlorophyll"][i, j],
         )
         rrs.append(out.atmos_corrected_reflectance_brdf / np.pi)
-    return chl_oc3(rrs)
+    return chl_oc3(rrs), rrs
 
 
-def calculate_mersi_chlor_with_6S_parallel(
-        dt: datetime.datetime,
-        radiance443: np.ndarray,
-        radiance490: np.ndarray,
-        radiance555: np.ndarray,
-        mask: np.ndarray,
-        latitude: np.ndarray,
-        longitude: np.ndarray,
-        sen_zen: np.ndarray,
-        sen_az: np.ndarray,
-        aot550: np.ndarray,
-        wind_speed: np.ndarray,
-        chlorophyll: np.ndarray,
-):
+def calculate_mersi_chlor_with_6S_parallel(**kwargs):
     from multiprocessing import Pool
-    h, w = radiance443.shape
+    h, w = kwargs["radiance443"].shape
+    kwargs["w"] = w
 
-    p = Pool()
-    result = list(tqdm.tqdm(p.imap(func, range(h * w)), total=h * w))
-    result = np.array(result)
-    result = result.reshape((h, w))
+    args = [(i, kwargs) for i in range(h * w)]
+    with Pool() as p:
+        result = list(tqdm.tqdm(p.imap(func, args), total=h * w, position=0))
+        chl = [r[0] for r in result]
+        rrs = [r[1] for r in result]
+        chl = np.array(chl).reshape((h, w))
+        rrs = np.array(rrs).reshape((h, w, 3))
 
-    return result
+    return chl, rrs

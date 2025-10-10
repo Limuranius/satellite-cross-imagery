@@ -82,6 +82,24 @@ class MERSIImage(SatelliteImage):
         # Fix broken pixels
         self.counts[self.counts == 65535] = 0
 
+        # Исправляем добавку темнового сигнала
+        # print("Fixed bands")
+        # match self.band:  # FIXME
+        #     case "8":
+        #         add_count = 17
+        #     case "9":
+        #         add_count = 17
+        #     case "10":
+        #         add_count = 25
+        #     case "11":
+        #         add_count = 23
+        #     case "12":
+        #         add_count = 16
+        #     case _:
+        #         add_count = 0
+        # print("added", add_count)
+        # self.counts += add_count
+
         if not LAZY_MODE:
             self.latitude = self.latitude[:]
             self.longitude = self.longitude[:]

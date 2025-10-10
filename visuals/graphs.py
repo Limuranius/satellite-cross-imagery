@@ -1,7 +1,10 @@
+import abc
 import os
 import pathlib
+from collections import namedtuple
 
 import pandas as pd
+from matplotlib.widgets import Slider
 from sklearn.linear_model import LinearRegression
 
 import matplotlib.pyplot as plt
@@ -62,7 +65,6 @@ def relplot_with_linregress(
     else:
         ax.scatter(x, y, s=s)
 
-
     if fit_intercept:
         txt = f"""slope={round(slope, round_slope)}
 intercept={round(intercept, round_intercept)}
@@ -106,8 +108,77 @@ std={np.std(x):.5f}"""
         transform=ax.transAxes,
     )
 
+
 def save_fig_to_path(path: pathlib.Path):
     if not path.parent.exists():
         os.makedirs(path.parent, exist_ok=True)
     plt.savefig(path)
     plt.close()
+
+
+class InteractivePlot(abc.ABC):
+    SliderData = namedtuple("SliderData", ["name", "start", "end", "init", "step"])
+    sliders: list[SliderData]  # must be initialized
+    _sliders_data: dict[str, Slider]  # name: Slider
+
+    def __init__(self, s=2):
+        self.fig, self.ax = plt.subplots()
+        plt.grid()
+        self.fig.subplots_adjust(left=0.25)
+        self._sliders_data = dict()
+        self.scatter = self.ax.scatter([0], [0], s=s)
+        self.line = self.ax.plot([0], [0], color="black", lw=2)[0]
+
+        for i, slider_data in enumerate(self.sliders):
+            slider = Slider(
+                ax=self.fig.add_axes([0.05, 0.04 * i, 0.2, 0.05]),
+                label=slider_data.name,
+                valmin=slider_data.start,
+                valmax=slider_data.end,
+                valinit=slider_data.init,
+                valstep=slider_data.step,
+            )
+            self._sliders_data[slider_data.name] = slider
+            slider.on_changed(self._update)
+        self._update(0)
+        plt.show()
+
+    def _update(self, _):
+        values = {name: slider.val for name, slider in self._sliders_data.items()}
+        self.update(values)
+
+    def update(self, values: dict):
+        pass
+
+
+class InteractiveImshow(abc.ABC):
+    SliderData = namedtuple("SliderData", ["name", "start", "end", "init", "step"])
+    sliders: list[SliderData]  # must be initialized
+    _sliders_data: dict[str, Slider]  # name: Slider
+
+    def __init__(self, starting_image: np.ndarray, vmin=None, vmax=None, cmap=None):
+        self.fig, self.ax = plt.subplots()
+        self.fig.subplots_adjust(left=0.25)
+        self._sliders_data = dict()
+        self.imshow = self.ax.imshow(starting_image, vmin=vmin, vmax=vmax, cmap=cmap)
+
+        for i, slider_data in enumerate(self.sliders):
+            slider = Slider(
+                ax=self.fig.add_axes([0.05, 0.04 * i, 0.2, 0.05]),
+                label=slider_data.name,
+                valmin=slider_data.start,
+                valmax=slider_data.end,
+                valinit=slider_data.init,
+                valstep=slider_data.step,
+            )
+            self._sliders_data[slider_data.name] = slider
+            slider.on_changed(self._update)
+        self._update()
+        plt.show()
+
+    def _update(self, _ = None):
+        values = {name: slider.val for name, slider in self._sliders_data.items()}
+        self.update(values)
+
+    def update(self, values: dict):
+        pass

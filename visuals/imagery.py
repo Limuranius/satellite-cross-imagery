@@ -3,17 +3,19 @@ import numpy as np
 from matplotlib.widgets import Slider
 
 
-def show_gray_with_value_adjustments(img: np.ndarray):
+def show_gray_with_value_adjustments(img: np.ndarray, cmap="gray"):
     # Create the figure and axis
     fig, ax = plt.subplots(figsize=(15, 15))
     plt.subplots_adjust(bottom=0.25)
 
-    vmin = 0
-    vmax = img.max()
+    vmin = img[~np.isnan(img)].min()
+    vmax = img[~np.isnan(img)].max()
+    # vmin = img.min()
+    # vmax = img.max()
     step = (vmax - vmin) / 250
 
     # Display the initial image
-    im_display = ax.imshow(img, cmap='gray', vmin=vmin, vmax=vmax)
+    im_display = ax.imshow(img, cmap=cmap, vmin=vmin, vmax=vmax)
     ax.set_title('Grayscale Image with Contrast Adjustment')
 
     # Create axes for the sliders

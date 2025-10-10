@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import tqdm
 from netCDF4 import Dataset
+from pykdtree.kdtree import KDTree
 
 import paths
 from web import NASA_parser
@@ -12,9 +13,16 @@ from web import NASA_parser
 class MODISChlor:
     def __init__(self, path: str):
         ds = Dataset(path, "r")
-        self.chl = ds.variables["chlor_a"]
+        self.chl = np.array(ds.variables["chlor_a"][:])
+        self.chl[self.chl < 0] = np.nan
         self.lat = np.array(ds.variables["lat"])
         self.lon = np.array(ds.variables["lon"])
+
+        lon2d, lat2d = np.meshgrid(self.lon, self.lat)
+        coords = np.array([lon2d, lat2d])
+        coords = coords.transpose((1, 2, 0))
+        coords = coords.reshape((-1, 2))  # flatten
+        self.tree = KDTree(coords)
 
     def get_point(self, lon: float, lat: float):
         lon_i = np.abs(self.lon - lon).argmin()
@@ -26,17 +34,12 @@ class MODISChlor:
             lons: np.ndarray,  # 2d array
             lats: np.ndarray,  # 2d array
     ):
-        h, w = lons.shape
-        chl = np.zeros_like(lons)
-        for i in tqdm.trange(h, position=0):
-            for j in range(w):
-                chl[i, j] = self.get_point(lon=lons[i, j], lat=lats[i, j])
-        # lon_i = np.abs(lons[:, :, None] - self.lon).argmin(axis=-1)
-        # lat_i = np.abs(lats[:, :, None] - self.lat).argmin(axis=-1)
-        # print(lon_i.shape)
-        # print(lat_i.shape)
-        # return self.chl[lon_i, lat_i]
-        return chl
+        coords = np.array([lons, lats])
+        coords = coords.transpose((1, 2, 0))
+        coords = coords.reshape((-1, 2))  # flatten
+        distance, indices = self.tree.query(coords)
+        i, j = np.unravel_index(indices, self.chl.shape)
+        return self.chl[i, j].reshape(lons.shape)
 
     def show(self):
         plt.imshow(self.chl)

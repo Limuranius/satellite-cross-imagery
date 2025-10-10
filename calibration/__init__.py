@@ -90,14 +90,54 @@ def predict_horizontal_noise_full(counts, horizontal_coeffs, horizontal_radius=1
     return pred_noise
 
 
+def area_vertical_mean(counts, w_left, w_right):
+    h, w = counts.shape
+    size = counts.dtype.itemsize
+    counts_pad = np.pad(counts, ((0, 0), (w_left, w_right)))
+    counts_windows = np.lib.stride_tricks.as_strided(  # Свёртка, применяем страйды
+        counts_pad,
+        shape=(
+            10,  # 10 датчиков
+            w,  # изначальная ширина без паддинга
+            w_left + w_right + 1,  # ширина окна
+        ),
+        strides=(
+            size * counts_pad.shape[1],
+            size,
+            size,
+        )
+    )
+    return counts_windows.mean(axis=(0, 2))
+
+def mean_window_correction(counts, left_w, right_w, coeffs):
+    new_counts = counts.copy()
+    for scan in range(counts.shape[0] // 10):
+        mean = area_vertical_mean(
+            counts[scan * 10: (scan + 1) * 10],
+            left_w,
+            right_w,
+        )
+        for sensor in range(10):
+            noise = (mean - counts[scan * 10 + sensor]) * coeffs[sensor]
+            noise[noise < 0] = 0
+            new_counts[scan * 10 + sensor] -= noise.astype(int)
+    return new_counts
+
 def new_correction(
         image: MERSIImage,
         remove_zebra: bool = False,
+        remove_zebra_normalized_dev: bool = False,
         remove_neighbor_influence: bool = False,
         remove_trace: bool = False,
+        correct_mean_window: bool = False,
+        fix_band15: bool = False,
 ):
+    if remove_zebra and remove_zebra_normalized_dev:
+        raise Exception("Can't combine zebra correction")
     if remove_zebra:
         fix_zebra.apply_coeffs.correct_mersi_image(image)
+    if remove_zebra_normalized_dev:
+        fix_zebra.apply_norm_deviation_coeffs.correct_mersi_image(image)
     if remove_neighbor_influence:
         noise = predict_vertical_noise_full(
             image.counts,
@@ -112,3 +152,48 @@ def new_correction(
             horizontal_coeffs=COEFFS[image.band]["trace"],
         )
         image.counts -= noise.astype(int)
+    if correct_mean_window:
+        image.counts = mean_window_correction(
+            image.counts,
+            COEFFS[image.band]["mean_window"]["left_window"],
+            COEFFS[image.band]["mean_window"]["right_window"],
+            coeffs=COEFFS[image.band]["mean_window"]["coeffs"],
+        )
+    if fix_band15 and image.band == "15":
+        # Нечётные сканы, первый и последний датчики
+        def vertical_mean(counts, w_left, w_right, h_up, h_down):
+            h, w = counts.shape
+            size = counts.dtype.itemsize
+            counts_pad = np.pad(counts, ((h_up, h_down), (w_left, w_right)))
+            counts_windows = np.lib.stride_tricks.as_strided(  # Свёртка, применяем страйды
+                counts_pad,
+                shape=(
+                    h,  # 10 датчиков
+                    w,  # изначальная ширина без паддинга
+                    h_up + h_down + 1,  # высота окна
+                    w_left + w_right + 1,  # ширина окна
+                ),
+                strides=(
+                    size * counts_pad.shape[1],
+                    size,
+                    size * counts_pad.shape[1],
+                    size,
+                )
+            )
+            return counts_windows.mean(axis=(-1, -2))
+        m = vertical_mean(
+            image.counts,
+            COEFFS[image.band]["band15_coeffs"]["left"],
+            COEFFS[image.band]["band15_coeffs"]["right"],
+            COEFFS[image.band]["band15_coeffs"]["up"],
+            COEFFS[image.band]["band15_coeffs"]["down"],
+        )
+        noise = m - image.counts
+        noise[noise < 0] = 0
+        noise = np.log(noise + 1)
+
+        for scan in range(200):
+            if scan % 2 == 0:
+                continue
+            sl = slice(scan * 10, (scan + 1) * 10)
+            image.counts[sl] -= (noise[sl] * COEFFS[image.band]["band15_coeffs"]["coeffs"][:, None]).astype(int)

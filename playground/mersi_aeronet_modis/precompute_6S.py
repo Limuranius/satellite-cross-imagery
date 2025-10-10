@@ -116,7 +116,7 @@ class TablePrecompute:
                 apparent_reflectance = image.apparent_reflectance_slice(area_idx)[:].copy()
 
                 values = self.df.loc[i].to_dict()
-                values.update({
+                values._update({
                     "mersi_mask": good_pixels_mask,
                     f"mersi_counts[{wl}nm]": counts,
                     f"mersi_radiance[{wl}nm]": radiance,
@@ -148,7 +148,7 @@ class TablePrecompute:
                 image = MERSIImage.from_dt(row["mersi_t"], band)
                 out = self._get_mersi_6S_output(row, image)
                 values = self.df.loc[i].to_dict()
-                values.update({f"mersi_6S[{wl}nm]": out.__dict__})
+                values._update({f"mersi_6S[{wl}nm]": out.__dict__})
                 self.df.loc[i] = values
 
     def add_modis_6S(self, modis_bands: list[str]) -> None:
@@ -160,7 +160,7 @@ class TablePrecompute:
                 wl = MODIS_BANDS_WAVELEN[band]
                 out = self._get_modis_6S_output(row, band)
                 values = self.df.loc[i].to_dict()
-                values.update({f"modis_6S[{wl}nm]": out.__dict__})
+                values._update({f"modis_6S[{wl}nm]": out.__dict__})
                 self.df.loc[i] = values
 
     def _get_mersi_6S_output(

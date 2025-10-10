@@ -1,9 +1,12 @@
 import pathlib
+import pickle
 import random
 from datetime import datetime, timedelta
 
 import cv2
 import numpy as np
+import pandas as pd
+import scipy
 import shapely
 import statsmodels.api as sm
 from geojson import Point, Polygon, Feature
@@ -92,10 +95,15 @@ def linregress_report(
         use_intercept=False,
         round_slope=5,
         round_intercept=5,
+        robust=False,
 ):
+    x = np.array(x)
     if use_intercept:
         x = sm.add_constant(x)
-    model = sm.OLS(y, x)
+    if robust:
+        model = sm.RLM(y, x)
+    else:
+        model = sm.OLS(y, x)
     results = model.fit()
     if use_intercept:
         slope = np.array(results.params)[1]
@@ -116,8 +124,10 @@ def linregress_report(
 
     if use_intercept:
         x = x[:, 1]  # Remove constant to calculate ME and RMSE
+    y_pred = x * slope + (intercept or 0)
     ME = (y - x).mean()
-    RMSE = np.sqrt(np.square(y - x).mean())
+    RMSD = np.sqrt(np.square(y - x).mean())
+    RMSE = np.sqrt(np.square(y_pred - y).mean())
     return {
         "slope": slope,
         "slope_interv": slope_interv,
@@ -125,12 +135,34 @@ def linregress_report(
         "intercept": intercept,
         "intercept_interv": intercept_interv,
         "intercept_pretty": f"{intercept} ± {intercept_interv}",
+        "R^2": None if robust else results.rsquared,
         "ME": ME,
-        # "RMSE": np.sqrt(np.square(y - x * slope).mean()),
+        "RMSD": RMSD,
         "RMSE": RMSE,
-        "R^2": results.rsquared,
     }
 
+
+def filter_two_sigma_mask(values: pd.Series | np.ndarray):
+    v1 = np.quantile(values, 0.025)
+    v2 = np.quantile(values, 0.975)
+    return (values >= v1) & (values <= v2)
+
+
+def mean_confidence_interval(data, confidence=0.95):
+    a = 1.0 * np.array(data)
+    n = len(a)
+    m, se = np.mean(a), scipy.stats.sem(a)
+    h = se * scipy.stats.t.ppf((1 + confidence) / 2., n-1)
+    return m, m-h, m+h
+
+
+def save_pickle(obj, path):
+    with open(path, "wb") as file:
+        pickle.dump(obj, file)
+
+def load_pickle(path):
+    with open(path, "rb") as file:
+        return pickle.load(file)
 
 F0 = dict((int(float(line.split()[0])), float(line.split()[1])) for line in
           open(pathlib.Path(__file__).parent / "Thuillier2003.txt").read().strip().split("\n"))

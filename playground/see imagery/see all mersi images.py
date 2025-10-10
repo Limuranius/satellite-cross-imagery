@@ -1,15 +1,10 @@
-from datetime import datetime
-
 from matplotlib import pyplot as plt
 
-from processing.load_imagery import iterate_close_images
+from processing import MERSIImage
+MERSIImage.LAZY_MODE = True
 
-# 4, 5, 7, 8, 9
-
-for i, (img_mersi, img_modis) in enumerate(iterate_close_images(
-        mersi_band="8",
-        modis_band="8",
-)):
-    plt.imshow(img_mersi.radiance)
-    plt.title(str(i) + " " + str(img_mersi.dt))
+for dt in MERSIImage.MERSIImage.all_dts()[::-1]:
+    img = MERSIImage.MERSIImage.from_dt(dt, "12")
+    plt.imshow(img.counts)
+    plt.title(str(dt))
     plt.show()

@@ -1,1 +1,1 @@
-from . import apply_coeffs
+from . import apply_coeffs, apply_norm_deviation_coeffs

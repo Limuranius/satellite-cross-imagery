@@ -11,7 +11,8 @@ def load_coeffs() -> np.ndarray:
     """
     float[15, 10, 2] - band, sensor, (slope, intercept)
     """
-    path = os.path.join(paths.COEFFS_DIR, "zebra_coeffs.csv")
+    # path = os.path.join(paths.COEFFS_DIR, "zebra_coeffs.csv")
+    path = os.path.join(paths.COEFFS_DIR, "zebra_coeffs_manual.csv")
     # path = os.path.join(paths.COEFFS_DIR, "zebra_coeffs_ice.csv")
     with open(path, newline="") as file:
         reader = csv.reader(file)

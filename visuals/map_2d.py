@@ -2,7 +2,7 @@ import folium
 
 from light_info.Info import Info
 from processing.SatelliteImage import SatelliteImage
-from utils import reverse_coords, fix_antimeridian, random_color
+import utils
 
 
 def show_image_boxes(
@@ -23,8 +23,8 @@ def show_image_boxes(
         # folium.Marker(corners[2][::-1], "p3").add_to(map_obj)
         # folium.Marker(corners[3][::-1], "p4").add_to(map_obj)
         folium.Polygon(
-            reverse_coords(fix_antimeridian(corners)),
-            color=random_color(),
+            utils.reverse_coords(utils.fix_antimeridian(corners)),
+            color=utils.random_color(),
             popup=f"{obj.dt}"
         ).add_to(map_obj)
 

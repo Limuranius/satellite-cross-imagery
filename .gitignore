@@ -7,3 +7,8 @@ imagery
 *.xlsx
 *.pkl
 *.txt
+*.eps
+*.npy
+*.pickle
+*.invalid
+*.rar

@@ -6,8 +6,6 @@ from dataclasses import dataclass
 
 import utils
 from custom_types import LonLat
-from utils import geopoint_inside_polygon
-
 
 @dataclass
 class Info(ABC):
@@ -27,7 +25,7 @@ class Info(ABC):
         #     lon = 360 + lon
         corners = [self.p1, self.p2, self.p3, self.p4]
         corners = utils.fix_antimeridian(corners)
-        return geopoint_inside_polygon(
+        return utils.geopoint_inside_polygon(
             (lon, lat),
             corners
         )

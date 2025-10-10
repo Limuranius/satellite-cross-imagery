@@ -2,8 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import minimize
 
-import calibration.utils
-
+import calibration.calibration_utils
 
 class Band12Optimizer:
     original_values: list[np.ndarray]
