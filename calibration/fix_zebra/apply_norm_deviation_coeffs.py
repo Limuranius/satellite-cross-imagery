@@ -14,6 +14,11 @@ def load_coeffs() -> np.ndarray:
     path = os.path.join(paths.COEFFS_DIR, "zebra_norm_deviation_coeffs.pickle")
     with open(path, "rb") as file:
         coeffs = pickle.load(file)
+
+    for band in coeffs:
+        coeffs[band][...] = 0.05
+    print("DEBUG")
+
     return coeffs
     # array = []
     # for band_coeffs in coeffs.values():

@@ -126,7 +126,6 @@ def atmosphere_correction(
 
     s.run()
     output = s.outputs
-
     return output
 
 
@@ -235,3 +234,42 @@ def calculate_mersi_chlor_with_6S_parallel(**kwargs):
         rrs = np.array(rrs).reshape((h, w, 3))
 
     return chl, rrs
+
+
+def __atm_corr(kwargs):
+    return atmosphere_correction(**kwargs).__dict__
+
+
+def modis_atmosphere_correction_parallel(
+        radiance: list[float],  # L_toa
+        band: str,
+        pixel_lat: list[float],
+        pixel_lon: list[float],
+        dt: list[datetime.datetime],
+        view_zenith: list[float],  # degrees
+        view_azimuth: list[float],  # degrees
+        aot550: list[float],
+        wind_speed: list[float],
+        chlorophyll: list[float],
+) -> list:
+    wavelength = SRF.modis_aqua_srf.MODIS_6S_WV[band]
+    from multiprocessing import Pool
+
+    args = []
+    for i in range(len(radiance)):
+        args.append({
+            "radiance": radiance[i],
+            "wavelength": wavelength,
+            "pixel_lat": pixel_lat[i],
+            "pixel_lon": pixel_lon[i],
+            "dt": dt[i],
+            "view_zenith": view_zenith[i],
+            "view_azimuth": view_azimuth[i],
+            "aot550": aot550[i],
+            "wind_speed": wind_speed[i],
+            "chlorophyll": chlorophyll[i],
+        })
+
+    with Pool(16) as p:
+        result = list(tqdm.tqdm(p.imap(__atm_corr, args), total=len(radiance), position=0))
+    return result

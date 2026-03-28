@@ -3,12 +3,13 @@ import bisect
 import pandas as pd
 from pyorbital.orbital import Orbital
 from matplotlib import pyplot as plt
+import paths
 
-df = pd.read_csv("data.csv", sep="\t")
+df = pd.read_csv(paths.DATA_DIR / "data.csv", sep="\t")
 df["modis_t"] = pd.to_datetime(df["modis_t"], format="mixed")
 df["aeronet_t"] = pd.to_datetime(df["aeronet_t"])
 
-tles = open("MODIS AQUA TLEs 2010-2025.txt").readlines()
+tles = open(paths.DATA_DIR / "MODIS AQUA TLEs 2002-2025.txt").readlines()
 tles = [(tles[i + 1].strip(), tles[i + 2].strip()) for i in range(0, len(tles), 3)]
 orbs = [Orbital("AQUA", line1=tle[0], line2=tle[1]) for tle in tles]
 
@@ -22,8 +23,8 @@ for i, row in df.iterrows():
         ), len(orbs) - 1)
     ]
     diff = abs(orb.tle.epoch - row["modis_t"]).days
-    if diff > 1:
-        print(row["modis_t"])
+    if diff > 10:
+        print(row["modis_t"], diff)
         continue
 
     az, elev = orb.get_observer_look(
@@ -38,4 +39,4 @@ for i, row in df.iterrows():
     df.loc[i, "modis_azimuth"] = az
 
 
-df.to_csv("data.csv", sep="\t", index=False)
+df.to_csv(paths.DATA_DIR / "data.csv", sep="\t", index=False)

@@ -2,7 +2,7 @@ import datetime
 import enum
 from io import BytesIO
 
-import grequests
+# import grequests
 import numpy as np
 import requests
 from PIL import Image

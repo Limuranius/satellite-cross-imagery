@@ -68,14 +68,27 @@ class MERSIImage(SatelliteImage):
         self.geo_path = geo_path
 
         self.hdf = h5py.File(file_path)
-        self.hdf_geo = h5py.File(geo_path)
 
-        self.latitude = self.hdf_geo["Geolocation"]["Latitude"]
-        self.longitude = self.hdf_geo["Geolocation"]["Longitude"]
-        self.sensor_zenith = self.hdf_geo["Geolocation"]["SensorZenith"]      #
-        self.sensor_azimuth = self.hdf_geo["Geolocation"]["SensorAzimuth"]    # degrees multiplied by 100 (e.g. 3452 for 34.52 degrees)
-        self.solar_zenith = self.hdf_geo["Geolocation"]["SolarZenith"]        #
-        self.solar_azimuth = self.hdf_geo["Geolocation"]["SolarAzimuth"]      #
+        if os.path.exists(geo_path):
+            self.hdf_geo = h5py.File(geo_path)
+
+            self.latitude = self.hdf_geo["Geolocation"]["Latitude"]
+            self.longitude = self.hdf_geo["Geolocation"]["Longitude"]
+            self.sensor_zenith = self.hdf_geo["Geolocation"]["SensorZenith"]      #
+            self.sensor_azimuth = self.hdf_geo["Geolocation"]["SensorAzimuth"]    # degrees multiplied by 100 (e.g. 3452 for 34.52 degrees)
+            self.solar_zenith = self.hdf_geo["Geolocation"]["SolarZenith"]        #
+            self.solar_azimuth = self.hdf_geo["Geolocation"]["SolarAzimuth"]      #
+
+            if not LAZY_MODE:
+                self.latitude = self.latitude[:]
+                self.longitude = self.longitude[:]
+                self.sensor_zenith = self.sensor_zenith[:]
+                self.sensor_azimuth = self.sensor_azimuth[:]
+                self.solar_zenith = self.solar_zenith[:]
+                self.solar_zenith = self.solar_zenith[:]
+                self.solar_azimuth = self.solar_azimuth[:]
+        else:
+            print("Warning: GEO file not found")
 
         band_index = MERSI_2_BANDS.index(band)
         self.counts = self.hdf["Data"]["EV_1KM_RefSB"][band_index].astype(int)
@@ -99,15 +112,6 @@ class MERSIImage(SatelliteImage):
         #         add_count = 0
         # print("added", add_count)
         # self.counts += add_count
-
-        if not LAZY_MODE:
-            self.latitude = self.latitude[:]
-            self.longitude = self.longitude[:]
-            self.sensor_zenith = self.sensor_zenith[:]
-            self.sensor_azimuth = self.sensor_azimuth[:]
-            self.solar_zenith = self.solar_zenith[:]
-            self.solar_zenith = self.solar_zenith[:]
-            self.solar_azimuth = self.solar_azimuth[:]
 
         date_str = self.hdf.attrs["Observing Beginning Date"].decode()
         time_str = self.hdf.attrs["Observing Beginning Time"].decode().split(".")[0]

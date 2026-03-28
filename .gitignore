@@ -12,3 +12,5 @@ imagery
 *.pickle
 *.invalid
 *.rar
+data
+notebooks

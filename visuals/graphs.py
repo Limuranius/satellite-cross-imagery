@@ -28,6 +28,7 @@ def relplot_with_linregress(
         round_r2=3,
         draw_line=True,
         color_density=True,
+        draw_diagonal=False,
 ):
     if ax is None:
         ax = plt.subplot()
@@ -66,17 +67,25 @@ def relplot_with_linregress(
         ax.scatter(x, y, s=s)
 
     if fit_intercept:
-        txt = f"""slope={round(slope, round_slope)}
+        txt = f"""slope={round(slope, round_slope)} ± {round(lin["slope_interv"], round_slope)}
 intercept={round(intercept, round_intercept)}
 r^2={round(r2, round_r2)}
 """
     else:
-        txt = f"""slope={round(slope, round_slope)}
+        txt = f"""slope={round(slope, round_slope)} ± {round(lin["slope_interv"], round_slope)}
 r^2={round(r2, round_r2)}
 """
 
     if draw_line:
         ax.plot(x, x * slope + intercept, color="red")
+    if draw_diagonal:
+        ax.plot(
+            [x.min(), x.max()],
+            [x.min(), x.max()],
+            color=(0, 0, 0, 0.5),
+            linestyle="--",
+        )
+    ax.grid(alpha=0.7)
 
     ax.text(
         0,

@@ -16,6 +16,8 @@ def download_file(
     else:
         response = session.get(url, stream=True)
 
+    print("Downloading file", url)
+
     # Sizes in bytes.
     total_size = int(response.headers.get("content-length", 0))
     block_size = 1024

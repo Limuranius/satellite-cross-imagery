@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import tqdm
 from processing.algorithms import atmosphere_correction
+import processing.algorithms
 
 import paths
 from processing.MERSIImage import MERSIImage, MERSI_BANDS_WAVELEN
@@ -13,8 +14,8 @@ from processing.MODISImage import MODIS_BANDS_WAVELEN, MODISImage
 import SRF.mersi_2_srf
 import SRF.modis_aqua_srf
 
-
 import processing
+
 processing.MODISImage.LAZY_MODE = True
 processing.MERSIImage.LAZY_MODE = True
 
@@ -83,7 +84,20 @@ class TablePrecompute:
     def add_modis_geometry(self) -> None:
         pass
 
-    def add_mersi_areas(self, mersi_bands: list[str], filter_na=True) -> None:
+    def add_mersi_areas(
+            self,
+            mersi_bands: list[str],
+            filter_na=True,
+            Lt_coeffs: list[float] = None,
+    ) -> None:
+        """
+        Lt_coeffs:
+            Список коэффициентов, на которые домножаются значения Lt,
+            и только потом заносятся в таблицу. Длина такая же, как и у :mersi_bands.
+            Если коэффициент 1, то сохраняется оригинальное Lt.
+        """
+        if Lt_coeffs is None:
+            Lt_coeffs = [1] * len(mersi_bands)
         for band in mersi_bands:
             wl = MERSI_BANDS_WAVELEN[band]
             self.df[f"mersi_counts[{wl}nm]"] = None
@@ -94,7 +108,7 @@ class TablePrecompute:
 
         for i, row in tqdm.tqdm(self.df.iterrows(), desc="Adding MERSI areas", total=len(self.df)):
             mersi_dt = row["mersi_t"]
-            for band in mersi_bands:
+            for band, lt_coeff in zip(mersi_bands, Lt_coeffs):
                 image = MERSIImage.from_dt(mersi_dt, band)
                 wl = image.wavelength
                 site_i, site_j = image.get_closest_pixel(row["aeronet_lon"], row["aeronet_lat"])
@@ -115,8 +129,10 @@ class TablePrecompute:
                 reflectance = image.reflectance_slice(area_idx)[:].copy()
                 apparent_reflectance = image.apparent_reflectance_slice(area_idx)[:].copy()
 
+                radiance *= lt_coeff
+
                 values = self.df.loc[i].to_dict()
-                values._update({
+                values.update({
                     "mersi_mask": good_pixels_mask,
                     f"mersi_counts[{wl}nm]": counts,
                     f"mersi_radiance[{wl}nm]": radiance,
@@ -148,7 +164,7 @@ class TablePrecompute:
                 image = MERSIImage.from_dt(row["mersi_t"], band)
                 out = self._get_mersi_6S_output(row, image)
                 values = self.df.loc[i].to_dict()
-                values._update({f"mersi_6S[{wl}nm]": out.__dict__})
+                values.update({f"mersi_6S[{wl}nm]": out.__dict__})
                 self.df.loc[i] = values
 
     def add_modis_6S(self, modis_bands: list[str]) -> None:
@@ -160,8 +176,31 @@ class TablePrecompute:
                 wl = MODIS_BANDS_WAVELEN[band]
                 out = self._get_modis_6S_output(row, band)
                 values = self.df.loc[i].to_dict()
-                values._update({f"modis_6S[{wl}nm]": out.__dict__})
+                values.update({f"modis_6S[{wl}nm]": out.__dict__})
                 self.df.loc[i] = values
+
+    def add_modis_6S_parallel(self, modis_bands: list[str]) -> None:
+        aot550 = self.df["aeronet_Aerosol_Optical_Depth[551nm]"]
+        aot550 = aot550.fillna(self.df["aeronet_Aerosol_Optical_Depth[555nm]"])
+        aot550 = aot550.fillna(self.df["aeronet_Aerosol_Optical_Depth[560nm]"])
+
+        for band in modis_bands:
+            wl = MODIS_BANDS_WAVELEN[band]
+
+            self.df[f"modis_6S[{wl}nm]"] = processing.algorithms.modis_atmosphere_correction_parallel(
+                radiance=self.df[f"nir_Lt_{MODIS_BANDS_WAVELEN[band]}_mean"].to_list(),
+                band=band,
+                pixel_lat=self.df["aeronet_lat"].to_list(),
+                pixel_lon=self.df["aeronet_lon"].to_list(),
+                dt=self.df["modis_t"].to_list(),
+                view_zenith=self.df["modis_zenith"].to_list(),
+                view_azimuth=self.df["modis_azimuth"].to_list(),
+                aot550=aot550.to_list(),
+                wind_speed=self.df["aeronet_Wind_Speed(m/s)"].to_list(),
+                # chlorophyll=self.df["aeronet_chlor_a_from_rrs"].to_list(),
+                chlorophyll=self.df["aeronet_Chlorophyll-a"].to_list(),
+            )
+
 
     def _get_mersi_6S_output(
             self,
@@ -226,25 +265,37 @@ class TablePrecompute:
 
 if __name__ == '__main__':
     INPUT_PATH = paths.DATA_DIR / "data.csv"
-    OUTPUT_PATH = paths.DATA_DIR / "data_with_mersi.pickle"
+    # OUTPUT_PATH = paths.DATA_DIR / "data_with_mersi.pickle"
+    # OUTPUT_PATH = paths.DATA_DIR / "data_with_mersi_aeronet_calib.pickle"
+    # OUTPUT_PATH = paths.DATA_DIR / "data.pickle"
+    OUTPUT_PATH = paths.DATA_DIR / "data_aeronet_chlor.pickle"
 
     df = pd.read_csv(INPUT_PATH, sep="\t")
     df["modis_t"] = pd.to_datetime(df["modis_t"], format="mixed")
     df["aeronet_t"] = pd.to_datetime(df["aeronet_t"])
-    df = df[df["modis_zenith"].notna()]
+    # df = df[df["modis_zenith"].notna()]
+    df = df[df["aeronet_chlor_a_from_rrs"].notna()]
+    df = df[df["aeronet_Chlorophyll-a"].notna()]
+    df = df[df["aeronet_Chlorophyll-a"] >= 0]
     p = TablePrecompute(df)
-    mersi_dts = MERSIImage.all_dts()
-    MERSI_BANDS = ["8", "9", "10", "11", "12", "13", "14", "15"]
+
+    # p = TablePrecompute.load(OUTPUT_PATH)
+
+    # mersi_dts = MERSIImage.all_dts()
+    # MERSI_BANDS = ["8", "9", "10", "11", "12", "13", "14", "15"]
     MODIS_BANDS = ["8", "9", "10", "11", "12", "13lo", "14lo", "15", "16"]
 
-    p.add_mersi_info(mersi_dts, filter_na=True)
+    # p.add_mersi_info(mersi_dts, filter_na=True)
+    # p.save(OUTPUT_PATH)
+
+    # Lt_coeffs = [1.05, 0.99, 0.91, 0.82, 0.76, 1.0, 0.7, 0.63]  # Подобраны по регрессиям с Lt AERONET-OC
+    # p.add_mersi_areas(MERSI_BANDS, filter_na=True, Lt_coeffs=Lt_coeffs)
+    # p.save(OUTPUT_PATH)
+
+    # p.add_mersi_6S(MERSI_BANDS)
+    # p.save(OUTPUT_PATH)
+
+    # p.add_modis_6S(MODIS_BANDS)
+    p.add_modis_6S_parallel(MODIS_BANDS)
     p.save(OUTPUT_PATH)
 
-    p.add_mersi_areas(MERSI_BANDS, filter_na=True)
-    p.save(OUTPUT_PATH)
-
-    p.add_mersi_6S(MERSI_BANDS)
-    p.save(OUTPUT_PATH)
-
-    p.add_modis_6S(MODIS_BANDS)
-    p.save(OUTPUT_PATH)

@@ -166,3 +166,17 @@ def load_pickle(path):
 
 F0 = dict((int(float(line.split()[0])), float(line.split()[1])) for line in
           open(pathlib.Path(__file__).parent / "Thuillier2003.txt").read().strip().split("\n"))
+
+
+def floor_datetime_5min(dt: datetime):
+    """
+    Floor a datetime object to the nearest 5-minute interval.
+
+    Args:
+        dt: datetime object to floor
+
+    Returns:
+        Floored datetime object with seconds and microseconds set to 0
+    """
+    floored_minute = (dt.minute // 5) * 5
+    return dt.replace(minute=floored_minute, second=0, microsecond=0)
