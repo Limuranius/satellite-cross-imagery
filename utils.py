@@ -135,7 +135,7 @@ def linregress_report(
         "intercept": intercept,
         "intercept_interv": intercept_interv,
         "intercept_pretty": f"{intercept} ± {intercept_interv}",
-        "R^2": None if robust else results.rsquared,
+        "R^2": 0.0 if robust else results.rsquared,
         "ME": ME,
         "RMSD": RMSD,
         "RMSE": RMSE,

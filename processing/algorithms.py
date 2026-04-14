@@ -100,6 +100,7 @@ def atmosphere_correction(
         aot550: float,
         wind_speed: float,
         chlorophyll: float,
+        wind_azimuth: float = 0.0,
 ):
     import Py6S
     s = Py6S.SixS()
@@ -118,7 +119,7 @@ def atmosphere_correction(
     s.atmos_profile = Py6S.AtmosProfile.FromLatitudeAndDate(pixel_lat, dt.date().isoformat())
     s.ground_reflectance = Py6S.GroundReflectance.HomogeneousOcean(
         wind_speed=wind_speed,
-        wind_azimuth=0,
+        wind_azimuth=wind_azimuth,
         salinity=-1,
         pigment_concentration=chlorophyll,
     )

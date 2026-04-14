@@ -29,6 +29,7 @@ def relplot_with_linregress(
         draw_line=True,
         color_density=True,
         draw_diagonal=False,
+        robust=False,
 ):
     if ax is None:
         ax = plt.subplot()
@@ -48,6 +49,7 @@ def relplot_with_linregress(
         data["x"],
         data["y"],
         use_intercept=fit_intercept,
+        robust=robust,
     )
     slope = lin["slope"]
     intercept = lin["intercept"]
